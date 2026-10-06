@@ -40,6 +40,17 @@
   .frase { font-family: "Playfair", serif; font-weight: 700; font-size: 76px; line-height: 1.15; color: var(--texto); margin: 0; }
   .barra { width: 140px; height: 10px; background: var(--terracota); margin-top: 40px; }
 
+  /* Versión compacta: para cuando no hay lugar arriba de la cabeza y la placa va sobre el pecho */
+  .placa.compacta { left: 90px; right: 90px; padding: 38px 52px; border-radius: 28px; max-height: 420px; }
+  .compacta .etiqueta { font-size: 30px; margin-bottom: 4px; }
+  .compacta .valor { font-size: 100px; }
+  .compacta .detalle { font-size: 33px; margin-top: 10px; }
+  .compacta .titulo { font-size: 50px; margin-bottom: 22px; }
+  .compacta .items li { font-size: 34px; gap: 22px; margin-bottom: 14px; }
+  .compacta .items .n { font-size: 30px; min-width: 44px; }
+  .compacta .frase { font-size: 56px; }
+  .compacta .barra { width: 100px; height: 8px; margin-top: 26px; }
+
   /* Subtítulo: sin fondo, con contorno oscuro para que se lea sobre la camisa y sobre la pared.
      En el flujo los incrusta ffmpeg con estos mismos valores; acá sirven para la vista previa. */
   .sub {
@@ -62,6 +73,7 @@
   function esc(t) { return String(t || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
   function dibujar(p) {
     let html = '';
+    // _top y _compacta los define componer.py según dónde está la cara del avatar
     if (p.tipo === 'dato') {
       html = '<div class="placa">' +
         (p.etiqueta ? '<p class="etiqueta">' + esc(p.etiqueta) + '</p>' : '') +
@@ -82,6 +94,9 @@
       html += '<div class="sub ' + (p.sub_estilo || 'karaoke') + '">' + txt + '</div>';
     }
     document.getElementById('raiz').innerHTML = html;
+    const caja = document.querySelector('.placa');
+    if (caja && p._compacta) caja.classList.add('compacta');
+    if (caja && p._top !== undefined) caja.style.top = p._top + 'px';
   }
   if (window.PLACA) dibujar(window.PLACA);
 </script>

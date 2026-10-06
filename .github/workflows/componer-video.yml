@@ -28,7 +28,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg
-          pip install -q playwright
+          pip install -q playwright "opencv-python-headless<5"
           python -m playwright install --with-deps chromium
 
       - name: Componer

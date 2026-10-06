@@ -7,6 +7,12 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
     video_url  dirección del video terminado en HeyGen
     placas     lista de placas (formato de la columna PLACAS_VIDEO), puede venir vacía
     tiempos    lista de palabras con sus tiempos: [{"w": "Tenés", "s": 0.12, "e": 0.41}, ...]
+    zona       opcional: "auto" (por defecto), "arriba" o "abajo". Viene de la columna ZONA_PLACA
+               de la pestaña Avatares y sirve para forzar la ubicación de las placas en un look.
+
+Ubicación: se detecta la cara del avatar en varios cuadros del video. Si la placa entra entre el
+encabezado de Reels y la cabeza, va arriba (si no entra en tamaño normal, en versión compacta).
+Si no hay lugar arriba, va en versión compacta sobre el pecho, debajo de los subtítulos.
 
 Deja el resultado en final.mp4 (en la carpeta de trabajo).
 """
@@ -31,13 +37,17 @@ BLANCO = "&H00FFFFFF"
 AMARILLO = "&H003FD2FF"      # #FFD23F en formato BGR de ASS
 CONTORNO = "&H001A1B1C"      # #1C1B1A
 SOMBRA = "&H73000000"
-POS_Y = 1170                 # parte superior del subtítulo, sobre el pecho
+POS_Y_DEFECTO = 1170         # parte superior del subtítulo si no se detecta la cara
 MAX_PALABRAS = 5
 MAX_CARACTERES = 28
 
 # Placas
 DURACION_MAX_PLACA = 6.0
 FUNDIDO = 0.3
+REELS_ARRIBA = 250           # debajo del encabezado de Reels
+REELS_ABAJO = 1580           # arriba del texto y los botones inferiores de Reels
+MARGEN_CARA = 40             # aire mínimo entre la placa y la cabeza
+ALTO_SUBTITULO = 170         # dos renglones de subtítulo más un margen
 
 
 def normalizar(t):
@@ -86,7 +96,7 @@ def limpiar(t):
     return str(t).replace("{", "").replace("}", "").replace("\\", "")
 
 
-def escribir_ass(palabras, destino):
+def escribir_ass(palabras, destino, pos_y=POS_Y_DEFECTO):
     cab = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -96,14 +106,17 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Sub,{FUENTE},{TAM},{BLANCO},{BLANCO},{CONTORNO},{SOMBRA},0,0,0,0,100,100,0,0,1,4,2,8,140,140,{POS_Y},1
+Style: Sub,{FUENTE},{TAM},{BLANCO},{BLANCO},{CONTORNO},{SOMBRA},0,0,0,0,100,100,0,0,1,4,2,8,140,140,{int(pos_y)},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lineas = []
-    for bloque in agrupar(palabras):
+    bloques = agrupar(palabras)
+    for b, bloque in enumerate(bloques):
         fin_bloque = float(bloque[-1]["e"]) + 0.15
+        if b + 1 < len(bloques):   # que un subtítulo no se superponga con el siguiente
+            fin_bloque = min(fin_bloque, float(bloques[b + 1][0]["s"]))
         for j, p in enumerate(bloque):
             ini = float(p["s"])
             fin = float(bloque[j + 1]["s"]) if j + 1 < len(bloque) else fin_bloque
@@ -113,6 +126,73 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             )
             lineas.append(f"Dialogue: 0,{t_ass(ini)},{t_ass(fin)},Sub,,0,0,0,,{texto}")
     destino.write_text(cab + "\n".join(lineas) + "\n", encoding="utf-8")
+
+
+def detectar_cara(video, muestras=12):
+    """Busca la cara en varios cuadros. Devuelve {cabeza, menton} en píxeles (1080x1920) o None."""
+    import cv2
+    cc = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_alt2.xml")
+    cap = cv2.VideoCapture(str(video))
+    n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    cajas = []
+    for k in range(muestras):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(n * (k + 0.5) / muestras))
+        ok, cuadro = cap.read()
+        if not ok:
+            continue
+        cuadro = cv2.resize(cuadro, (1080, 1920))
+        gris = cv2.equalizeHist(cv2.cvtColor(cuadro, cv2.COLOR_BGR2GRAY))
+        for (x, y, w, h) in cc.detectMultiScale(gris, 1.1, 5, minSize=(150, 150)):
+            cajas.append((int(y), int(h)))
+    cap.release()
+    if not cajas:
+        return None
+    mayor = max(h for _, h in cajas)
+    cajas = [(y, h) for y, h in cajas if h >= 0.7 * mayor]   # descarta detecciones falsas chicas
+    cabeza = min(y - 0.45 * h for y, h in cajas)              # el pelo queda por encima del recuadro
+    menton = max(y + 1.05 * h for y, h in cajas)
+    return {"cabeza": max(0, cabeza), "menton": min(1920, menton)}
+
+
+def ubicar_placas(placas, cara, zona, carpeta):
+    """Elige para cada placa la mejor ubicación libre y devuelve los PNG finales."""
+    menton = cara["menton"] if cara else 1000
+    sub_y = min(max(menton + 50, 950), 1250) if cara else POS_Y_DEFECTO
+    abajo_top = sub_y + ALTO_SUBTITULO
+    zona = (zona or "auto").strip().lower()
+
+    candidatos = []
+    if zona in ("auto", "arriba"):
+        candidatos += [("arriba", False, REELS_ARRIBA), ("arriba", True, REELS_ARRIBA)]
+    if zona in ("auto", "abajo"):
+        candidatos += [("abajo", True, abajo_top)]
+    if not candidatos:
+        candidatos = [("abajo", True, abajo_top)]
+
+    def entra(lugar, medida):
+        if medida["recortada"]:
+            return False
+        if lugar == "arriba":
+            if zona == "arriba" and not cara:
+                return True
+            return cara is not None and medida["abajo"] <= cara["cabeza"] - MARGEN_CARA
+        return medida["abajo"] <= REELS_ABAJO
+
+    finales = []
+    for i, placa in enumerate(placas, start=1):
+        elegida = None
+        for j, (lugar, compacta, top) in enumerate(candidatos):
+            prueba = dict(placa, _top=top, _compacta=compacta)
+            medida = render([prueba], carpeta / "pruebas", prefijo=f"p{i}-{j}")[0]
+            if entra(lugar, medida) or j == len(candidatos) - 1:
+                elegida = (lugar, compacta, medida)
+                if not entra(lugar, medida):
+                    print(f"Aviso: la placa {i} no entra bien en ningún lugar; acortá el texto")
+                break
+        lugar, compacta, medida = elegida
+        print(f"Placa {i}: {lugar}{' compacta' if compacta else ''} (de {medida['arriba']:.0f} a {medida['abajo']:.0f} px)")
+        finales.append(medida["ruta"])
+    return finales, sub_y
 
 
 def duracion(video):
@@ -156,7 +236,9 @@ def componer(datos):
         placas = json.loads(placas) if placas.strip() else []
 
     ventanas = ventanas_placas(placas, palabras, total)
-    pngs = render([v[2] for v in ventanas], TRABAJO / "placas") if ventanas else []
+    cara = detectar_cara(entrada)
+    print("Cara detectada:", cara if cara else "no (se usan posiciones por defecto)")
+    pngs, sub_y = ubicar_placas([v[2] for v in ventanas], cara, datos.get("zona"), TRABAJO)
 
     cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada)]
     for png in pngs:
@@ -174,7 +256,7 @@ def componer(datos):
 
     if palabras:
         ass = TRABAJO / "subtitulos.ass"
-        escribir_ass(palabras, ass)
+        escribir_ass(palabras, ass, sub_y)
         fuentes = str(AQUI / "fuentes").replace(":", "\\:")
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
