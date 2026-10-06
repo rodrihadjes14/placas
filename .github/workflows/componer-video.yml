@@ -1,0 +1,49 @@
+name: Componer video
+
+# Lo dispara VideosHeyGen.gs cuando HeyGen termina un video.
+# Superpone placas y subtítulos, y sube el resultado a Cloudinary como final-<ID>-<VIDEO_ID>.
+on:
+  repository_dispatch:
+    types: [componer-video]
+
+concurrency:
+  group: componer-${{ github.event.client_payload.video_id }}
+  cancel-in-progress: false
+
+jobs:
+  componer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: video
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar herramientas
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          pip install -q playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Componer
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          CARPETA_TRABAJO: ${{ runner.temp }}/trabajo
+        run: python componer.py
+
+      - name: Subir a Cloudinary
+        env:
+          FILA: ${{ github.event.client_payload.id }}
+          VIDEO_ID: ${{ github.event.client_payload.video_id }}
+        run: |
+          curl -sS --fail-with-body \
+            -F "file=@${{ runner.temp }}/trabajo/final.mp4" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=final-${FILA}-${VIDEO_ID}" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/video/upload
