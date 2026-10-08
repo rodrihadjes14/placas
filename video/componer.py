@@ -9,6 +9,10 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
     tiempos    lista de palabras con sus tiempos: [{"w": "Tenés", "s": 0.12, "e": 0.41}, ...]
     zona       opcional: "auto" (por defecto), "arriba" o "abajo". Viene de la columna ZONA_PLACA
                de la pestaña Avatares y sirve para forzar la ubicación de las placas en un look.
+    cortes     opcional: segundos del audio original donde se partió el video en escenas
+               (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
+               el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
+               de los subtítulos según dónde quedó cada corte en el video de HeyGen.
 
 Ubicación: se detecta la cara del avatar en varios cuadros del video. Si la placa entra entre el
 encabezado de Reels y la cabeza, va arriba (si no entra en tamaño normal, en versión compacta).
@@ -48,6 +52,10 @@ REELS_ARRIBA = 250           # debajo del encabezado de Reels
 REELS_ABAJO = 1580           # arriba del texto y los botones inferiores de Reels
 MARGEN_CARA = 40             # aire mínimo entre la placa y la cabeza
 ALTO_SUBTITULO = 170         # dos renglones de subtítulo más un margen
+
+# Escenas
+ACERCAMIENTO = 1.15          # 115 % en las escenas pares (2.ª, 4.ª...)
+VENTANA_CORTE = 0.6          # segundos alrededor del corte esperado en los que se lo busca
 
 
 def normalizar(t):
@@ -203,6 +211,84 @@ def duracion(video):
     return float(r.stdout.strip())
 
 
+def fps_video(video):
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate",
+         "-of", "default=nw=1:nk=1", str(video)],
+        capture_output=True, text=True, check=True,
+    )
+    num, _, den = r.stdout.strip().partition("/")
+    return float(num) / float(den or 1)
+
+
+def detectar_cortes(video, esperados):
+    """Para cada corte esperado (segundos), devuelve el número del primer cuadro de la escena
+    nueva: el cuadro que más cambia respecto del anterior dentro de la ventana de búsqueda."""
+    import cv2
+    import numpy as np
+    cap = cv2.VideoCapture(str(video))
+    fps = cap.get(cv2.CAP_PROP_FPS) or fps_video(video)
+    diffs, anterior = [], None
+    while True:
+        ok, cuadro = cap.read()
+        if not ok:
+            break
+        gris = cv2.cvtColor(cv2.resize(cuadro, (270, 480)), cv2.COLOR_BGR2GRAY).astype(np.int16)
+        diffs.append(0.0 if anterior is None else float(np.abs(gris - anterior).mean()))
+        anterior = gris
+    cap.release()
+    cuadros = []
+    for t in esperados:
+        a = max(1, int((t - VENTANA_CORTE) * fps))
+        b = min(len(diffs) - 1, int((t + VENTANA_CORTE) * fps))
+        if b <= a:
+            continue
+        i = max(range(a, b + 1), key=lambda k: diffs[k])
+        print(f"Corte esperado en {t:.2f} s: cuadro {i} ({i / fps:.2f} s), cambio {diffs[i]:.1f}")
+        cuadros.append(i)
+    return sorted(set(cuadros)), fps
+
+
+def alternar_encuadre(entrada, cuadros_corte, cara, destino):
+    """Deja las escenas impares en plano normal y acerca las pares, cortando en el cuadro exacto."""
+    z = ACERCAMIENTO
+    cw = int(round(1080 / z / 2)) * 2
+    ch = int(round(1920 / z / 2)) * 2
+    x0 = (1080 - cw) // 2
+    cabeza = cara["cabeza"] if cara else 450
+    y0 = int(min(max(cabeza * (1 - 1 / z), 0), 1920 - ch))   # la cabeza queda a la misma altura
+    limites = [0] + list(cuadros_corte) + [None]
+    filtros, etiquetas = [], []
+    for k in range(len(limites) - 1):
+        ini, fin = limites[k], limites[k + 1]
+        rango = f"start_frame={ini}" + (f":end_frame={fin}" if fin is not None else "")
+        f = f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,trim={rango},setpts=PTS-STARTPTS"
+        if k % 2 == 1:
+            f += f",crop={cw}:{ch}:{x0}:{y0},scale=1080:1920"
+        filtros.append(f + f",setsar=1[e{k}]")
+        etiquetas.append(f"[e{k}]")
+    filtros.append("".join(etiquetas) + f"concat=n={len(etiquetas)}:v=1:a=0[v]")
+    subprocess.run([
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada),
+        "-filter_complex", ";".join(filtros), "-map", "[v]", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-c:a", "copy", str(destino),
+    ], check=True)
+    return destino
+
+
+def realinear_palabras(palabras, esperados, reales):
+    """Corre los tiempos de las palabras posteriores a cada corte según dónde quedó en el video."""
+    pares = sorted(zip(esperados, reales))
+    res = []
+    for p in palabras:
+        desplazamiento = 0.0
+        for esperado, real in pares:
+            if float(p["s"]) >= esperado:
+                desplazamiento = real - esperado
+        res.append(dict(p, s=float(p["s"]) + desplazamiento, e=float(p["e"]) + desplazamiento))
+    return res
+
+
 def ventanas_placas(placas, palabras, total):
     """Calcula desde y hasta qué segundo se ve cada placa. Las que no ubica, las descarta con aviso."""
     ubicadas = []
@@ -234,6 +320,17 @@ def componer(datos):
     placas = datos.get("placas") or []
     if isinstance(placas, str):
         placas = json.loads(placas) if placas.strip() else []
+
+    esperados = [float(c) for c in (datos.get("cortes") or [])]
+    if esperados:
+        cuadros, fps = detectar_cortes(entrada, esperados)
+        if len(cuadros) == len(esperados):
+            palabras = realinear_palabras(palabras, esperados, [c / fps for c in cuadros])
+            print("Alternando encuadre en", len(cuadros) + 1, "escenas")
+            entrada = alternar_encuadre(entrada, cuadros, detectar_cara(entrada), TRABAJO / "escenas.mp4")
+            total = duracion(entrada)
+        else:
+            print("Aviso: no se encontraron todos los cortes; el video queda sin cambio de encuadre")
 
     ventanas = ventanas_placas(placas, palabras, total)
     cara = detectar_cara(entrada)
