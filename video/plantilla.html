@@ -4,52 +4,61 @@
 <meta charset="utf-8">
 <title>Placa de video 1080x1920</title>
 <style>
-  @font-face { font-family: "Playfair"; src: url("fuentes/PlayfairDisplay-700.woff2") format("woff2"); font-weight: 700; }
-  @font-face { font-family: "InterL"; src: url("fuentes/Inter-Regular.otf"); font-weight: 400; }
-  @font-face { font-family: "InterL"; src: url("fuentes/Inter-SemiBold.otf"); font-weight: 600; }
-  @font-face { font-family: "InterL"; src: url("fuentes/Inter-Bold.otf"); font-weight: 700; }
+  /* Sistema "Grotesca expresiva" (aprobado 09/10): Bricolage Grotesque, base neutra, acento amarillo. */
+  @font-face { font-family: "Bricolage"; src: url("fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
   @font-face { font-family: "InterL"; src: url("fuentes/Inter-ExtraBold.otf"); font-weight: 800; }
 
   :root {
-    --terracota: #A7644A;
-    --texto: #373634;
-    --gris: #878684;
-    --borde: #E6E2DD;
+    --carbon: #1B1A19;
+    --grafito: #3A3836;
+    --piedra: #6E6A66;
+    --blanco: #FFFFFF;
+    --amarillo: #F2C230;
   }
   html, body { margin: 0; padding: 0; background: transparent; }
-  body { width: 1080px; height: 1920px; position: relative; overflow: hidden; font-family: "InterL", sans-serif; }
+  body { width: 1080px; height: 1920px; position: relative; overflow: hidden; font-family: "Bricolage", sans-serif; }
 
-  /* Zona de la placa: entre el encabezado de Reels (arriba) y la cabeza del avatar (abajo) */
+  /* Zona de la placa: entre el encabezado de Reels (arriba) y la cabeza del avatar (abajo).
+     Las placas alternan tarjeta blanca (impares) y carbón (pares): la clase .oscura la pone componer.py. */
   .placa {
     position: absolute; left: 72px; right: 72px; top: 250px;
     max-height: 480px; box-sizing: border-box;
-    background: rgba(255, 255, 255, 0.97);
-    border: 2px solid var(--borde); border-radius: 32px;
-    padding: 56px 64px;
+    background: rgba(255, 255, 255, 0.98); color: var(--carbon);
+    border-radius: 40px; padding: 54px 62px 58px;
   }
-  .etiqueta { color: var(--terracota); font-weight: 600; font-size: 36px; margin: 0 0 8px; }
-  .valor { font-family: "Playfair", serif; font-weight: 700; font-size: 150px; line-height: 1.05; color: var(--texto); margin: 0; }
-  .detalle { color: var(--gris); font-size: 40px; line-height: 1.45; margin: 18px 0 0; }
+  .placa.oscura { background: rgba(27, 26, 25, 0.97); color: var(--blanco); }
 
-  .titulo { font-family: "Playfair", serif; font-weight: 700; font-size: 68px; line-height: 1.1; color: var(--texto); margin: 0 0 34px; }
+  /* Frase clave marcada con *asteriscos* en PLACAS_VIDEO: marcador amarillo en la tarjeta blanca,
+     texto amarillo en la tarjeta carbón. */
+  mark { background: var(--amarillo); color: var(--carbon); padding: 0 12px; border-radius: 10px;
+         -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .oscura mark { background: none; color: var(--amarillo); padding: 0; }
+
+  .etiqueta { color: var(--piedra); font-weight: 600; font-size: 36px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .oscura .etiqueta { color: var(--amarillo); }
+  .valor { font-weight: 800; font-size: 156px; line-height: 1; letter-spacing: -0.045em; margin: 0; }
+  .detalle { color: var(--grafito); font-weight: 400; font-size: 40px; line-height: 1.4; margin: 16px 0 0; }
+  .oscura .detalle { color: #D6D2CC; }
+
+  .titulo { font-weight: 800; font-size: 66px; line-height: 1.04; letter-spacing: -0.035em; margin: 0 0 34px; }
   .items { list-style: none; margin: 0; padding: 0; }
-  .items li { display: flex; gap: 28px; align-items: baseline; font-size: 40px; line-height: 1.35; color: var(--texto); margin-bottom: 24px; }
+  .items li { display: flex; gap: 26px; align-items: center; font-weight: 500; font-size: 42px; line-height: 1.25; margin-bottom: 22px; }
   .items li:last-child { margin-bottom: 0; }
-  .items .n { color: var(--terracota); font-weight: 700; font-size: 36px; min-width: 52px; }
+  .items .n { flex: none; width: 66px; height: 66px; border-radius: 50%; background: var(--amarillo); color: var(--carbon);
+              display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 28px; letter-spacing: -0.02em; }
 
-  .frase { font-family: "Playfair", serif; font-weight: 700; font-size: 76px; line-height: 1.15; color: var(--texto); margin: 0; }
-  .barra { width: 140px; height: 10px; background: var(--terracota); margin-top: 40px; }
+  .frase { font-weight: 800; font-size: 80px; line-height: 1.03; letter-spacing: -0.04em; margin: 0; }
 
   /* Versión compacta: para cuando no hay lugar arriba de la cabeza y la placa va sobre el pecho */
-  .placa.compacta { left: 90px; right: 90px; padding: 38px 52px; border-radius: 28px; max-height: 420px; }
+  .placa.compacta { left: 90px; right: 90px; padding: 38px 50px 42px; border-radius: 32px; max-height: 420px; }
   .compacta .etiqueta { font-size: 30px; margin-bottom: 4px; }
-  .compacta .valor { font-size: 100px; }
+  .compacta .valor { font-size: 104px; }
   .compacta .detalle { font-size: 33px; margin-top: 10px; }
   .compacta .titulo { font-size: 50px; margin-bottom: 22px; }
-  .compacta .items li { font-size: 34px; gap: 22px; margin-bottom: 14px; }
-  .compacta .items .n { font-size: 30px; min-width: 44px; }
-  .compacta .frase { font-size: 56px; }
-  .compacta .barra { width: 100px; height: 8px; margin-top: 26px; }
+  .compacta .items li { font-size: 34px; gap: 20px; margin-bottom: 14px; }
+  .compacta .items .n { width: 52px; height: 52px; font-size: 23px; }
+  .compacta .frase { font-size: 58px; }
+  .compacta mark { padding: 0 9px; border-radius: 8px; }
 
   /* Subtítulo: sin fondo, con contorno oscuro para que se lea sobre la camisa y sobre la pared.
      En el flujo los incrusta ffmpeg con estos mismos valores; acá sirven para la vista previa. */
@@ -71,22 +80,24 @@
 <script>
   // La placa llega como window.PLACA (la inyecta render.py). Tipos: dato, pasos, frase.
   function esc(t) { return String(t || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  // Escapa el texto y convierte *frase clave* en <mark>. Un asterisco suelto se borra.
+  function txt(t) { return esc(t).replace(/\*([^*]+)\*/g, '<mark>$1</mark>').replace(/\*/g, ''); }
   function dibujar(p) {
     let html = '';
-    // _top y _compacta los define componer.py según dónde está la cara del avatar
+    // _top, _compacta y _oscura los define componer.py según dónde está la cara y el orden de la placa
     if (p.tipo === 'dato') {
       html = '<div class="placa">' +
-        (p.etiqueta ? '<p class="etiqueta">' + esc(p.etiqueta) + '</p>' : '') +
-        '<p class="valor">' + esc(p.valor) + '</p>' +
-        (p.detalle ? '<p class="detalle">' + esc(p.detalle) + '</p>' : '') + '</div>';
+        (p.etiqueta ? '<p class="etiqueta">' + txt(p.etiqueta) + '</p>' : '') +
+        '<p class="valor">' + txt(p.valor) + '</p>' +
+        (p.detalle ? '<p class="detalle">' + txt(p.detalle) + '</p>' : '') + '</div>';
     } else if (p.tipo === 'pasos') {
       html = '<div class="placa">' +
-        (p.titulo ? '<p class="titulo">' + esc(p.titulo) + '</p>' : '') +
+        (p.titulo ? '<p class="titulo">' + txt(p.titulo) + '</p>' : '') +
         '<ul class="items">' + (p.items || []).slice(0, 3).map((t, i) =>
-          '<li><span class="n">0' + (i + 1) + '</span><span>' + esc(t) + '</span></li>').join('') +
+          '<li><span class="n">0' + (i + 1) + '</span><span>' + txt(t) + '</span></li>').join('') +
         '</ul></div>';
     } else {
-      html = '<div class="placa"><p class="frase">' + esc(p.texto) + '</p><div class="barra"></div></div>';
+      html = '<div class="placa"><p class="frase">' + txt(p.texto) + '</p></div>';
     }
     if (p.subtitulo_demo) {
       const palabras = String(p.subtitulo_demo).split(' ');
@@ -96,6 +107,7 @@
     document.getElementById('raiz').innerHTML = html;
     const caja = document.querySelector('.placa');
     if (caja && p._compacta) caja.classList.add('compacta');
+    if (caja && p._oscura) caja.classList.add('oscura');
     if (caja && p._top !== undefined) caja.style.top = p._top + 'px';
   }
   if (window.PLACA) dibujar(window.PLACA);

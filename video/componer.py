@@ -190,7 +190,7 @@ def ubicar_placas(placas, cara, zona, carpeta):
     for i, placa in enumerate(placas, start=1):
         elegida = None
         for j, (lugar, compacta, top) in enumerate(candidatos):
-            prueba = dict(placa, _top=top, _compacta=compacta)
+            prueba = dict(placa, _top=top, _compacta=compacta, _oscura=(i % 2 == 0))   # blanca, carbón, blanca...
             medida = render([prueba], carpeta / "pruebas", prefijo=f"p{i}-{j}")[0]
             if entra(lugar, medida) or j == len(candidatos) - 1:
                 elegida = (lugar, compacta, medida)
