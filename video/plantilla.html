@@ -49,6 +49,11 @@
 
   .frase { font-weight: 800; font-size: 80px; line-height: 1.03; letter-spacing: -0.04em; margin: 0; }
 
+  /* Placa de contacto: la agrega sola componer.py durante la última oración del video. */
+  .placa.contacto { background: var(--amarillo); color: var(--carbon); }
+  .contacto-titulo { font-weight: 800; font-size: 78px; line-height: 1.02; letter-spacing: -0.04em; margin: 0; }
+  .contacto-detalle { font-weight: 600; font-size: 44px; line-height: 1.2; letter-spacing: -0.01em; margin: 16px 0 0; }
+
   /* Versión compacta: para cuando no hay lugar arriba de la cabeza y la placa va sobre el pecho */
   .placa.compacta { left: 90px; right: 90px; padding: 38px 50px 42px; border-radius: 32px; max-height: 420px; }
   .compacta .etiqueta { font-size: 30px; margin-bottom: 4px; }
@@ -58,6 +63,8 @@
   .compacta .items li { font-size: 34px; gap: 20px; margin-bottom: 14px; }
   .compacta .items .n { width: 52px; height: 52px; font-size: 23px; }
   .compacta .frase { font-size: 58px; }
+  .compacta .contacto-titulo { font-size: 58px; }
+  .compacta .contacto-detalle { font-size: 34px; margin-top: 10px; }
   .compacta mark { padding: 0 9px; border-radius: 8px; }
 
   /* Subtítulo: sin fondo, con contorno oscuro para que se lea sobre la camisa y sobre la pared.
@@ -96,6 +103,9 @@
         '<ul class="items">' + (p.items || []).slice(0, 3).map((t, i) =>
           '<li><span class="n">0' + (i + 1) + '</span><span>' + txt(t) + '</span></li>').join('') +
         '</ul></div>';
+    } else if (p.tipo === 'contacto') {
+      html = '<div class="placa contacto"><p class="contacto-titulo">' + txt(p.titulo || 'Escribinos por WhatsApp') + '</p>' +
+        '<p class="contacto-detalle">' + txt(p.detalle || 'Link en nuestro perfil') + '</p></div>';
     } else {
       html = '<div class="placa"><p class="frase">' + txt(p.texto) + '</p></div>';
     }

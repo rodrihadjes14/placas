@@ -9,6 +9,8 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
     tiempos    lista de palabras con sus tiempos: [{"w": "Tenés", "s": 0.12, "e": 0.41}, ...]
     zona       opcional: "auto" (por defecto), "arriba" o "abajo". Viene de la columna ZONA_PLACA
                de la pestaña Avatares y sirve para forzar la ubicación de las placas en un look.
+    contacto   opcional, true por defecto: agrega la placa "Escribinos por WhatsApp / Link en nuestro
+               perfil" durante la última oración del video (la llamada a la acción).
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
                el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
@@ -190,7 +192,8 @@ def ubicar_placas(placas, cara, zona, carpeta):
     for i, placa in enumerate(placas, start=1):
         elegida = None
         for j, (lugar, compacta, top) in enumerate(candidatos):
-            prueba = dict(placa, _top=top, _compacta=compacta, _oscura=(i % 2 == 0))   # blanca, carbón, blanca...
+            oscura = i % 2 == 0 and placa.get("tipo") != "contacto"   # blanca, carbón, blanca...; contacto en amarillo
+            prueba = dict(placa, _top=top, _compacta=compacta, _oscura=oscura)
             medida = render([prueba], carpeta / "pruebas", prefijo=f"p{i}-{j}")[0]
             if entra(lugar, medida) or j == len(candidatos) - 1:
                 elegida = (lugar, compacta, medida)
@@ -289,6 +292,31 @@ def realinear_palabras(palabras, esperados, reales):
     return res
 
 
+def inicio_ultima_oracion(palabras):
+    """Segundo en que empieza la última oración dicha (la llamada a la acción), o None."""
+    for k in range(len(palabras) - 2, -1, -1):
+        if re.search(r"[.!?…]$", str(palabras[k]["w"])):
+            return float(palabras[k + 1]["s"])
+    return None
+
+
+def sumar_contacto(ventanas, palabras, total):
+    """Agrega la placa de contacto por WhatsApp durante la última oración y acorta la anterior."""
+    desde = inicio_ultima_oracion(palabras)
+    hasta = total - 0.1
+    if desde is None or hasta - desde < 1.5:
+        print("Aviso: la última oración es muy corta; el video sale sin placa de contacto")
+        return ventanas
+    res = []
+    for d, h, p in ventanas:
+        h = min(h, desde - 0.05)
+        if h - d >= 1.0:
+            res.append((d, h, p))
+    res.append((desde, hasta, {"tipo": "contacto"}))
+    print(f"Placa de contacto: de {desde:.2f} a {hasta:.2f} s")
+    return res
+
+
 def ventanas_placas(placas, palabras, total):
     """Calcula desde y hasta qué segundo se ve cada placa. Las que no ubica, las descarta con aviso."""
     ubicadas = []
@@ -333,6 +361,8 @@ def componer(datos):
             print("Aviso: no se encontraron todos los cortes; el video queda sin cambio de encuadre")
 
     ventanas = ventanas_placas(placas, palabras, total)
+    if palabras and datos.get("contacto", True):
+        ventanas = sumar_contacto(ventanas, palabras, total)
     cara = detectar_cara(entrada)
     print("Cara detectada:", cara if cara else "no (se usan posiciones por defecto)")
     pngs, sub_y = ubicar_placas([v[2] for v in ventanas], cara, datos.get("zona"), TRABAJO)
