@@ -6,7 +6,7 @@ Uso:
     python publicar.py <ID> <URL_IMAGEN> <carpeta_estado> [IG,FB]
 
 Variables de entorno:
-    META_TOKEN      token de acceso de la página (secreto de GitHub META_PAGE_TOKEN)
+    META_TOKEN      token del usuario del sistema publicador-historias o de la página (secreto META_PAGE_TOKEN)
     IG_USER_ID      cuenta de Instagram profesional del estudio
     FB_PAGE_ID      página de Facebook del estudio
     GRAPH_VERSION   versión de la Graph API (por defecto v23.0)
@@ -31,8 +31,8 @@ IG = os.environ.get("IG_USER_ID", "")
 PAGINA = os.environ.get("FB_PAGE_ID", "")
 
 
-def graph(metodo, ruta, **params):
-    params["access_token"] = TOKEN
+def graph(metodo, ruta, token=None, **params):
+    params["access_token"] = token or TOKEN
     datos = urllib.parse.urlencode(params).encode()
     if metodo == "GET":
         req = urllib.request.Request(f"{BASE}/{ruta}?{datos.decode()}")
@@ -62,9 +62,20 @@ def publicar_instagram(url):
     return graph("POST", f"{IG}/media_publish", creation_id=contenedor)["id"]
 
 
+def token_pagina():
+    # El secreto puede ser un token de usuario del sistema o un token de pagina. Las publicaciones en
+    # la pagina exigen token de pagina: si el secreto no lo es, se pide el de la pagina con el.
+    try:
+        tok = graph("GET", PAGINA, fields="access_token").get("access_token")
+    except RuntimeError:
+        tok = None
+    return tok or TOKEN
+
+
 def publicar_facebook(url):
-    foto = graph("POST", f"{PAGINA}/photos", url=url, published="false")["id"]
-    res = graph("POST", f"{PAGINA}/photo_stories", photo_id=foto)
+    tok = token_pagina()
+    foto = graph("POST", f"{PAGINA}/photos", token=tok, url=url, published="false")["id"]
+    res = graph("POST", f"{PAGINA}/photo_stories", token=tok, photo_id=foto)
     return res.get("post_id") or res.get("id") or foto
 
 
