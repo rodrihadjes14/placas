@@ -1,0 +1,7 @@
+:root{--carbon:#1B1A19;--hueso:#F3EEE5;--amarillo:#F2C230;--grafito:#3A3836}
+body{margin:0;background:var(--hueso);color:var(--carbon);font:17px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:720px;margin:0 auto;padding:48px 16px 64px}
+h1{font-size:30px;line-height:1.15;margin:0 0 6px}h2{font-size:20px;margin:32px 0 6px}
+.fecha{color:var(--grafito);font-size:14px;margin:0 0 28px}
+a{color:var(--carbon)}nav a{margin-right:16px}
+footer{margin-top:48px;border-top:2px solid var(--amarillo);padding-top:16px;font-size:14px;color:var(--grafito)}
