@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  /* Historia 1080x1920. Mismo sistema que carruseles y placas de video: Bricolage Grotesque,
+     base neutra (carbón, hueso, blanco) y amarillo como único color. */
+  @font-face { font-family: "Bricolage"; src: url("../video/fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
+  :root {
+    --carbon: #1B1A19;
+    --grafito: #3A3836;
+    --piedra: #6E6A66;
+    --hueso: #F3EEE5;
+    --blanco: #FFFFFF;
+    --amarillo: #F2C230;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1080px; height: 1920px; position: relative; overflow: hidden;
+    font-family: "Bricolage", sans-serif; background: var(--fondo); color: var(--tinta);
+  }
+  body.carbon   { --fondo: var(--carbon);   --tinta: var(--blanco);  --suave: #D6D2CC;        --linea: rgba(255,255,255,.16); }
+  body.hueso    { --fondo: var(--hueso);    --tinta: var(--carbon);  --suave: var(--grafito); --linea: rgba(27,26,25,.14); }
+  body.blanco   { --fondo: var(--blanco);   --tinta: var(--carbon);  --suave: var(--grafito); --linea: rgba(27,26,25,.12); }
+  body.amarillo { --fondo: var(--amarillo); --tinta: var(--carbon);  --suave: var(--grafito); --linea: rgba(27,26,25,.18); }
+
+  /* Zona segura de historias: arriba quedan la barra de progreso y el nombre de la cuenta,
+     abajo el campo de respuesta. Todo el contenido va entre 250 y 1580 px. */
+  .contenido {
+    position: absolute; left: 100px; right: 100px; top: 250px; bottom: 340px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .etiqueta {
+    align-self: flex-start; margin: 0 0 56px; padding: 14px 30px; border-radius: 999px;
+    background: var(--amarillo); color: var(--carbon);
+    font-weight: 700; font-size: 36px; letter-spacing: .02em; text-transform: uppercase;
+  }
+  body.amarillo .etiqueta { background: var(--carbon); color: var(--amarillo); }
+
+  .texto { margin: 0; font-weight: 800; font-size: 96px; line-height: 1.08; letter-spacing: -0.02em; }
+  .texto.largo { font-size: 84px; }
+  .texto.muy-largo { font-size: 72px; }
+  mark { background: var(--amarillo); color: var(--carbon); padding: 0 14px; border-radius: 12px;
+         -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  body.carbon mark { background: none; color: var(--amarillo); padding: 0; }
+  body.amarillo mark { background: var(--carbon); color: var(--amarillo); }
+
+  .detalle { margin: 52px 0 0; color: var(--suave); font-weight: 400; font-size: 46px; line-height: 1.38; }
+
+  .cta {
+    margin-top: 84px; padding: 40px 48px; border-radius: 36px;
+    background: var(--amarillo); color: var(--carbon);
+  }
+  body.amarillo .cta { background: var(--carbon); color: var(--blanco); }
+  .cta-titulo { margin: 0; font-weight: 800; font-size: 56px; line-height: 1.05; letter-spacing: -0.015em; }
+  .cta-detalle { margin: 12px 0 0; font-weight: 600; font-size: 38px; }
+  body.amarillo .cta-detalle { color: var(--amarillo); }
+
+  .pie {
+    position: absolute; left: 100px; right: 100px; bottom: 150px;
+    border-top: 2px solid var(--linea); padding-top: 34px;
+    display: flex; align-items: center;
+  }
+  .pie img { height: 150px; }
+</style>
+</head>
+<body>
+<div class="contenido" id="contenido"></div>
+<div class="pie"><img id="logo" alt=""></div>
+<script>
+  // La historia llega como window.HISTORIA (la inyecta generar.py):
+  // {tipo, texto, detalle, fondo, cta_titulo, cta_detalle}. La frase clave del texto va entre *asteriscos*.
+  function esc(t) { return String(t || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function txt(t) { return esc(t).replace(/\*([^*]+)\*/g, '<mark>$1</mark>').replace(/\*/g, ''); }
+  const ETIQUETAS = { dato: 'Dato', mito: 'Mito', recordatorio: 'Recordá', pregunta: '¿Te pasa?' };
+  function dibujar(h) {
+    const fondo = ['carbon', 'hueso', 'blanco', 'amarillo'].includes(h.fondo) ? h.fondo : 'hueso';
+    document.body.className = fondo;
+    document.getElementById('logo').src = fondo === 'carbon' ? '../logo-blanco.png' : '../logo.png';
+    const largo = String(h.texto || '').replace(/\*/g, '').length;
+    const clase = largo > 70 ? 'texto muy-largo' : largo > 46 ? 'texto largo' : 'texto';
+    const etiqueta = ETIQUETAS[String(h.tipo || '').toLowerCase()];
+    document.getElementById('contenido').innerHTML =
+      (etiqueta ? '<p class="etiqueta">' + esc(etiqueta) + '</p>' : '') +
+      '<p class="' + clase + '">' + txt(h.texto) + '</p>' +
+      (h.detalle ? '<p class="detalle">' + txt(h.detalle) + '</p>' : '') +
+      '<div class="cta"><p class="cta-titulo">' + esc(h.cta_titulo || 'Escribinos por WhatsApp') + '</p>' +
+      '<p class="cta-detalle">' + esc(h.cta_detalle || 'Link en nuestro perfil') + '</p></div>';
+  }
+  if (window.HISTORIA) dibujar(window.HISTORIA);
+</script>
+</body>
+</html>

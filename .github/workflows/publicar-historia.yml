@@ -1,0 +1,123 @@
+name: Publicar historia
+
+# Lo dispara Historias.gs (Apps Script) una vez por día con la historia que dejó la tarea diaria
+# en la pestaña Historias. Genera la placa 1080x1920, la sube a este repositorio, la publica como
+# historia en Instagram y en Facebook, y deja el resultado en historias/<ID>/estado.json,
+# que Historias.gs lee para marcar la fila como publicado o error.
+#
+# También se puede correr a mano desde la pestaña Actions ("Run workflow") para probar:
+# con "solo_generar" tildado arma la placa y la sube, pero no publica.
+on:
+  repository_dispatch:
+    types: [publicar-historia]
+  workflow_dispatch:
+    inputs:
+      id:
+        description: ID de la historia (por ejemplo T63)
+        required: true
+      tipo:
+        description: dato, mito, recordatorio o pregunta
+        default: dato
+      texto:
+        description: Frase principal (la frase clave entre *asteriscos*)
+        required: true
+      detalle:
+        description: Oración de apoyo (opcional)
+        default: ''
+      fondo:
+        description: carbon, hueso, blanco o amarillo
+        default: hueso
+      redes:
+        description: Redes donde publicar
+        default: IG,FB
+      solo_generar:
+        description: Solo generar la placa, sin publicar
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: historias
+  cancel-in-progress: false
+
+env:
+  IG_USER_ID: '17841477637615411'
+  FB_PAGE_ID: '850362664826554'
+
+jobs:
+  historia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Leer la historia
+        id: datos
+        env:
+          PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || toJson(github.event.inputs) }}
+        run: |
+          python - <<'PY'
+          import json, os, re, time
+          p = json.loads(os.environ["PAYLOAD"])
+          ident = str(p.get("id", "")).strip().upper()
+          if not re.fullmatch(r"T\d{1,4}", ident):
+              raise SystemExit(f"ID inválido: {ident!r}")
+          if not str(p.get("texto", "")).strip():
+              raise SystemExit("La historia no tiene TEXTO")
+          historia = {k: str(p.get(k, "") or "").strip() for k in ("id", "tipo", "texto", "detalle", "fondo")}
+          historia["id"] = ident
+          os.makedirs(f"historias/{ident}", exist_ok=True)
+          open("historia.json", "w", encoding="utf-8").write(json.dumps(historia, ensure_ascii=False))
+          redes = str(p.get("redes") or "IG,FB")
+          solo = str(p.get("solo_generar", "false")).lower() == "true"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"id={ident}\nredes={redes}\nsolo={'true' if solo else 'false'}\n")
+              out.write(f"archivo=historias/{ident}/{ident}-{int(time.time())}.jpg\n")
+          PY
+
+      - name: Instalar herramientas
+        run: |
+          pip install -q playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Generar la placa
+        run: python historia/generar.py historia.json "${{ steps.datos.outputs.archivo }}"
+
+      - name: Subir la placa
+        run: |
+          git config user.name "historias-bot"
+          git config user.email "historias-bot@users.noreply.github.com"
+          git add "${{ steps.datos.outputs.archivo }}"
+          git commit -m "historia ${{ steps.datos.outputs.id }}"
+          git pull --rebase -q origin main
+          git push -q origin HEAD:main
+
+      - name: Publicar en Instagram y Facebook
+        id: publicar
+        if: steps.datos.outputs.solo != 'true'
+        continue-on-error: true
+        env:
+          META_TOKEN: ${{ secrets.META_PAGE_TOKEN }}
+        run: |
+          sleep 10
+          python historia/publicar.py "${{ steps.datos.outputs.id }}" \
+            "https://raw.githubusercontent.com/${{ github.repository }}/main/${{ steps.datos.outputs.archivo }}" \
+            "historias/${{ steps.datos.outputs.id }}" "${{ steps.datos.outputs.redes }}"
+
+      - name: Guardar el resultado
+        if: steps.datos.outputs.solo != 'true'
+        run: |
+          git add "historias/${{ steps.datos.outputs.id }}/estado.json"
+          git commit -m "estado historia ${{ steps.datos.outputs.id }}" || true
+          git pull --rebase -q origin main
+          git push -q origin HEAD:main
+          if [ "${{ steps.publicar.outcome }}" != "success" ]; then
+            echo "La historia no se pudo publicar en todas las redes: revisá historias/${{ steps.datos.outputs.id }}/estado.json"
+            exit 1
+          fi
