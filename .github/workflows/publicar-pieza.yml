@@ -1,0 +1,105 @@
+name: Publicar pieza
+
+# Reemplaza al escenario "Post On Social Media" de Make. Lo dispara Publicador.gs (Apps Script)
+# por cada pieza de la pestaña Aprobación lista para salir: post estático y carrusel en estado
+# graficado, Reel con VIDEO aprobado. Publica en Instagram y en la página de Facebook (Reel nativo
+# en las dos) y deja el resultado en publicaciones/<ID>/estado.json, que Publicador.gs lee para
+# marcar la fila como publicado.
+#
+# A mano (pestaña Actions > Run workflow) sirve para probar: con modo "validar" revisa el token,
+# las cuentas y que los archivos estén accesibles, sin publicar nada.
+on:
+  repository_dispatch:
+    types: [publicar-pieza]
+  workflow_dispatch:
+    inputs:
+      id:
+        description: ID de la fila (por ejemplo T62)
+        required: true
+      formato:
+        description: Post estatico, Carrusel o Reel
+        required: true
+      caption:
+        description: Texto de la publicación
+        default: ''
+      media:
+        description: Direcciones de las imágenes o del video, separadas por espacios
+        required: true
+      redes:
+        description: Redes donde publicar
+        default: IG,FB
+      modo:
+        description: validar (no publica) o publicar
+        default: validar
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publicacion-${{ github.event.client_payload.id || github.event.inputs.id }}
+  cancel-in-progress: false
+
+env:
+  IG_USER_ID: '17841477637615411'
+  FB_PAGE_ID: '850362664826554'
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Leer la pieza
+        id: datos
+        env:
+          PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || toJson(github.event.inputs) }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          p = json.loads(os.environ["PAYLOAD"])
+          ident = str(p.get("id", "")).strip().upper()
+          if not re.fullmatch(r"T\d{1,4}", ident):
+              raise SystemExit(f"ID inválido: {ident!r}")
+          media = p.get("media") or []
+          if isinstance(media, str):
+              media = media.split()
+          pieza = {"id": ident, "formato": p.get("formato", ""), "caption": p.get("caption", ""),
+                   "media": [m.strip() for m in media if m.strip()], "redes": p.get("redes") or "IG,FB"}
+          open("pieza.json", "w", encoding="utf-8").write(json.dumps(pieza, ensure_ascii=False))
+          modo = "publicar" if os.environ.get("GITHUB_EVENT_NAME") == "repository_dispatch" else str(p.get("modo") or "validar")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"id={ident}\nmodo={modo}\n")
+          print(f"{ident} · {pieza['formato']} · {len(pieza['media'])} archivo(s) · modo {modo}")
+          PY
+
+      - name: Validar
+        if: steps.datos.outputs.modo != 'publicar'
+        env:
+          META_TOKEN: ${{ secrets.META_PAGE_TOKEN }}
+        run: python publicacion/publicar.py pieza.json "publicaciones/${{ steps.datos.outputs.id }}" --validar
+
+      - name: Publicar en Instagram y Facebook
+        id: publicar
+        if: steps.datos.outputs.modo == 'publicar'
+        continue-on-error: true
+        env:
+          META_TOKEN: ${{ secrets.META_PAGE_TOKEN }}
+        run: python publicacion/publicar.py pieza.json "publicaciones/${{ steps.datos.outputs.id }}"
+
+      - name: Guardar el resultado
+        if: steps.datos.outputs.modo == 'publicar'
+        run: |
+          git config user.name "publicador-bot"
+          git config user.email "publicador-bot@users.noreply.github.com"
+          git add "publicaciones/${{ steps.datos.outputs.id }}/estado.json"
+          git commit -m "estado publicación ${{ steps.datos.outputs.id }}" || true
+          for i in 1 2 3; do git pull --rebase -q origin main && git push -q origin HEAD:main && break; sleep 5; done
+          if [ "${{ steps.publicar.outcome }}" != "success" ]; then
+            echo "La pieza no se pudo publicar en todas las redes: revisá publicaciones/${{ steps.datos.outputs.id }}/estado.json"
+            exit 1
+          fi
