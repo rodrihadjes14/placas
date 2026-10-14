@@ -1,0 +1,25 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conectando TikTok</title><link rel="stylesheet" href="estilo.css"></head><body><main>
+<h1>Conectando la cuenta de TikTok…</h1>
+<p id="msg">Un momento.</p>
+<script>
+  // TikTok vuelve acá después de autorizar. El parámetro state trae, en base64url, la dirección del
+  // script de la planilla que inició la conexión: se reenvía el código a ese script, que lo canjea
+  // por los tokens y los guarda en privado. Solo se aceptan direcciones de Google Apps Script.
+  (function () {
+    var p = new URLSearchParams(location.search);
+    var msg = document.getElementById('msg');
+    if (p.get('error')) { msg.textContent = 'TikTok no autorizó la conexión: ' + (p.get('error_description') || p.get('error')); return; }
+    var state = p.get('state') || '', code = p.get('code') || '';
+    var destino = '';
+    try {
+      var b = state.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+      destino = atob(b + '==='.slice((b.length + 3) % 4));
+    } catch (e) {}
+    if (!code || !/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(destino)) {
+      msg.textContent = 'No se pudo completar la conexión: volvé a empezar desde la planilla.'; return;
+    }
+    location.replace(destino + '?code=' + encodeURIComponent(code) + '&state=' + encodeURIComponent(state));
+  })();
+</script>
+</main></body></html>
