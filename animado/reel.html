@@ -125,10 +125,20 @@
 
   // Ubicación vertical según el alto real del gancho y de la afirmación
   const conRuta = v.grafico === "trayecto";
-  let y = 330 + $("gancho").offsetHeight + 46;
-  if (conRuta) { $("ruta").style.top = y + "px"; y += 170 + 30; } else { $("ruta").remove(); y += 20; }
-  $("afirmacion").style.top = y + "px";
-  $("fuente").style.top = (y + $("afirmacion").offsetHeight + 22) + "px";
+  if (!conRuta) $("ruta").remove();
+  // Si el texto no entra en el panel (hasta 920 px), achica gancho y afirmación de a poco
+  let escala = 1;
+  function ubicar() {
+    $("gancho").style.fontSize = Math.round(80 * escala) + "px";
+    $("afirmacion").style.fontSize = Math.round(68 * escala) + "px";
+    let y = 330 + $("gancho").offsetHeight + 46;
+    if (conRuta) { $("ruta").style.top = y + "px"; y += 170 + 30; } else { y += 20; }
+    $("afirmacion").style.top = y + "px";
+    const yf = y + $("afirmacion").offsetHeight + 22;
+    $("fuente").style.top = yf + "px";
+    return yf + 32;
+  }
+  while (ubicar() > 920 && escala > 0.62) escala -= 0.04;
 
   const E = "power3.out";
   const entrada = Math.max(0, Number(v.entrada) || 0);
