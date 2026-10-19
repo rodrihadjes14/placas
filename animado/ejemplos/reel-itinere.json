@@ -1,14 +1,17 @@
 {
   "etiqueta": "ACCIDENTE IN ITINERE",
   "gancho": "¿Te accidentaste yendo al trabajo?",
+  "afirmacion": "También lo cubre *la ART.*",
+  "fuente": "Art. 6, Ley 24.557",
+  "titulo2": "Cuenta el *trayecto*",
   "grafico": "trayecto",
   "origen": "Casa",
   "destino": "Trabajo",
   "evento": "Accidente",
-  "afirmacion": "También lo cubre *la ART.*",
-  "fuente": "Art. 6, Ley 24.557",
+  "nota2": "",
   "entrada": 2.4,
-  "cta_desde": 8.1,
-  "duracion": 10.5,
+  "cambio": 6.6,
+  "cta_desde": 12.2,
+  "duracion": 14.5,
   "vista_previa": true
 }

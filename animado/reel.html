@@ -1,22 +1,36 @@
 <!doctype html>
 <html lang="es" data-composition-variables='[
-  {"id":"etiqueta","type":"string","label":"Etiqueta","default":"ACCIDENTE IN ITINERE"},
-  {"id":"gancho","type":"string","label":"Gancho","default":"¿Te accidentaste yendo al trabajo?"},
-  {"id":"grafico","type":"enum","label":"Gráfico","default":"trayecto","options":[{"value":"trayecto","label":"Trayecto con evento"},{"value":"ninguno","label":"Sin gráfico"}]},
-  {"id":"origen","type":"string","label":"Origen del trayecto","default":"Casa"},
-  {"id":"destino","type":"string","label":"Destino del trayecto","default":"Trabajo"},
-  {"id":"evento","type":"string","label":"Evento en el trayecto","default":"Accidente"},
-  {"id":"afirmacion","type":"string","label":"Afirmación (resaltado entre asteriscos)","default":"También lo cubre *la ART.*"},
-  {"id":"fuente","type":"string","label":"Fuente legal","default":"Art. 6, Ley 24.557"},
-  {"id":"cta_titulo","type":"string","label":"CTA, primera línea","default":"¿Te pasó?"},
+  {"id":"etiqueta","type":"string","label":"Etiqueta","default":"CONTRA QUIÉN RECLAMAR"},
+  {"id":"gancho","type":"string","label":"Gancho","default":"¿Reclamar el accidente es ir contra tu empleador?"},
+  {"id":"afirmacion","type":"string","label":"Afirmación (resaltado entre asteriscos)","default":"El reclamo se hace contra *la ART,* no contra tu empleador."},
+  {"id":"fuente","type":"string","label":"Fuente legal","default":"Arts. 26 y 39, Ley 24.557"},
+  {"id":"titulo2","type":"string","label":"Panel 2, título (resaltado entre asteriscos)","default":"A quién le *reclamás*"},
+  {"id":"grafico","type":"enum","label":"Panel 2, gráfico","default":"contra","options":[{"value":"contra","label":"A quién sí y a quién no"},{"value":"pasos","label":"Pasos"},{"value":"dato","label":"Dato destacado"},{"value":"dias","label":"Grilla de días"},{"value":"trayecto","label":"Trayecto con evento"}]},
+  {"id":"quien","type":"string","label":"Contra: quién reclama","default":"Vos"},
+  {"id":"si","type":"string","label":"Contra: a quién sí","default":"La ART"},
+  {"id":"no","type":"string","label":"Contra: a quién no","default":"Tu empleador"},
+  {"id":"pasos","type":"string","label":"Pasos (separados con |)","default":"Denunciás el accidente|La ART te atiende|Te evalúa la Comisión Médica"},
+  {"id":"valor","type":"string","label":"Dato: valor","default":"1 año"},
+  {"id":"dato_etiqueta","type":"string","label":"Dato: etiqueta","default":"Hasta"},
+  {"id":"dato_detalle","type":"string","label":"Dato: detalle","default":"de licencia paga"},
+  {"id":"dias_total","type":"number","label":"Días de la grilla","default":30,"min":10,"max":40},
+  {"id":"dias_a","type":"number","label":"Días del primer tramo","default":10,"min":1,"max":39},
+  {"id":"leyenda_a","type":"string","label":"Leyenda del primer tramo","default":"Empleador"},
+  {"id":"leyenda_b","type":"string","label":"Leyenda del segundo tramo","default":"ART"},
+  {"id":"origen","type":"string","label":"Trayecto: origen","default":"Casa"},
+  {"id":"destino","type":"string","label":"Trayecto: destino","default":"Trabajo"},
+  {"id":"evento","type":"string","label":"Trayecto: evento","default":"Accidente"},
+  {"id":"nota2","type":"string","label":"Panel 2, nota al pie","default":"Tu puesto de trabajo no está en juego."},
+  {"id":"cta_titulo","type":"string","label":"CTA, primera línea","default":"¿Tenés esta duda?"},
   {"id":"cta_resaltado","type":"string","label":"CTA, segunda línea","default":"Escribinos."},
-  {"id":"cta_detalle","type":"string","label":"CTA, detalle","default":"Te orientamos sin costo. Solo cobramos si vos cobrás."},
+  {"id":"cta_detalle","type":"string","label":"CTA, detalle","default":"El mismo abogado que te atiende es el que lleva tu caso."},
   {"id":"cta_boton","type":"string","label":"CTA, botón","default":"WhatsApp · link en el perfil"},
-  {"id":"entrada","type":"number","label":"Segundo en que entra el panel (fin del gancho)","default":2.4,"min":0,"max":10,"step":0.1},
-  {"id":"cta_desde","type":"number","label":"Segundo en que entra el CTA","default":8.1,"min":3,"max":120,"step":0.1},
-  {"id":"duracion","type":"number","label":"Duración total (s)","default":10.5,"min":4,"max":120,"step":0.1},
+  {"id":"entrada","type":"number","label":"Segundo en que entra el panel 1 (fin del gancho)","default":2.4,"min":0,"max":10,"step":0.1},
+  {"id":"cambio","type":"number","label":"Segundo en que entra el panel 2","default":6.6,"min":1,"max":120,"step":0.1},
+  {"id":"cta_desde","type":"number","label":"Segundo en que entra el CTA","default":12.2,"min":3,"max":120,"step":0.1},
+  {"id":"duracion","type":"number","label":"Duración total (s)","default":14.5,"min":4,"max":120,"step":0.1},
   {"id":"vista_previa","type":"boolean","label":"Vista previa con avatar de muestra y subtítulos","default":true},
-  {"id":"subtitulos","type":"string","label":"Subtítulos de muestra (JSON)","default":"[{\"t\":\"¿Te accidentaste yendo al trabajo?\",\"s\":0.2,\"e\":2.2},{\"t\":\"Aunque haya pasado en el camino,\",\"s\":2.5,\"e\":4.6},{\"t\":\"la ART también tiene que cubrirte.\",\"s\":4.8,\"e\":7.4},{\"t\":\"Escribinos por WhatsApp.\",\"s\":8.4,\"e\":9.8}]"}
+  {"id":"subtitulos","type":"string","label":"Subtítulos de muestra (JSON)","default":"[{\"t\":\"¿Reclamar el accidente es ir contra tu empleador?\",\"s\":0.2,\"e\":2.2},{\"t\":\"El reclamo se hace contra la aseguradora,\",\"s\":2.5,\"e\":4.4},{\"t\":\"no contra tu empleador.\",\"s\":4.5,\"e\":6.2},{\"t\":\"No le reclamás a quien te da trabajo,\",\"s\":6.6,\"e\":8.8},{\"t\":\"del otro lado está la aseguradora.\",\"s\":9.0,\"e\":11.6},{\"t\":\"Escribinos por WhatsApp.\",\"s\":12.4,\"e\":14.0}]"}
 ]'>
 <head>
 <meta charset="UTF-8" />
@@ -24,25 +38,77 @@
 <title>Reel animado · Estudio Canaro</title>
 <script src="assets/gsap.min.js"></script>
 <style>
-  /* Capa gráfica del Reel en pantalla dividida: gráfico arriba (0-960), avatar abajo (960-1920).
-     Con vista_previa=false la mitad inferior queda transparente y se exporta en MOV con alfa
-     para superponerla al video de HeyGen. */
+  /* Capa gráfica del Reel en pantalla dividida: paneles arriba (0-960), avatar abajo (960-1920).
+     Panel 1: gancho + afirmación. Panel 2: gráfico que explica la misma afirmación. Cierre: CTA.
+     Con vista_previa=false la mitad inferior queda transparente y se exporta en MOV con alfa. */
   @font-face { font-family: "Bricolage"; src: url("assets/fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
-  :root { --amarillo:#F2C230; --carbon:#1B1A19; --hueso:#ECE8E1; --texto:#2B2A28; --gris:#8A8682; }
+  :root { --amarillo:#F2C230; --carbon:#1B1A19; --hueso:#ECE8E1; --blanco:#FFFFFF; --texto:#2B2A28; --gris:#8A8682; --celda:#EEECE8; }
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { width:1080px; height:1920px; overflow:hidden; background:transparent; }
   #root { position:relative; width:100%; height:100%; overflow:hidden; font-family:"Bricolage", Arial, sans-serif; color:var(--carbon); }
 
-  /* Panel: el contenido arranca debajo del encabezado de Reels (≈250 px). No hay franja inferior:
-     el texto y los botones de Instagram y TikTok tapan esa zona. */
-  .arriba { position:absolute; left:0; top:0; width:1080px; height:960px; background:var(--hueso); overflow:hidden; }
+  /* Paneles: el contenido arranca debajo del encabezado de Reels (≈250 px). */
+  .arriba { position:absolute; left:0; top:0; width:1080px; height:960px; overflow:hidden; }
+  .panel { position:absolute; left:0; top:0; width:1080px; height:960px; overflow:hidden; }
+  .p1 { background:var(--hueso); }
+  .p2 { background:var(--blanco); }
   .marca { position:absolute; left:90px; top:236px; right:90px; display:flex; align-items:center; justify-content:space-between; }
   .marca img { height:58px; width:auto; }
   .etiqueta { font-size:24px; font-weight:700; letter-spacing:.14em; padding:10px 20px; border:3px solid var(--carbon); border-radius:999px; }
+  .num { font-size:24px; font-weight:700; letter-spacing:.1em; color:var(--gris); }
   .gancho { position:absolute; left:90px; top:330px; width:900px; font-size:80px; line-height:1.02; font-weight:800; letter-spacing:-.03em; }
   .w { display:inline-block; margin-right:.22em; }
+  .afirmacion { position:absolute; left:90px; width:920px; font-size:68px; line-height:1.05; font-weight:800; letter-spacing:-.025em; }
+  .hl { position:relative; display:inline-block; margin-right:.22em; }
+  .hl .m { position:absolute; left:-10px; right:-10px; bottom:6px; height:30px; background:var(--amarillo); transform-origin:0 50%; }
+  .hl span { position:relative; }
+  .fuente { position:absolute; left:90px; font-size:26px; font-weight:500; color:var(--gris); }
 
-  .ruta { position:absolute; left:90px; width:900px; height:170px; }
+  .titulo2 { position:absolute; left:90px; top:330px; width:900px; font-size:66px; line-height:1.04; font-weight:800; letter-spacing:-.03em; }
+  .graf { position:absolute; left:90px; width:900px; }
+  .nota2 { position:absolute; left:90px; width:900px; font-size:32px; font-weight:600; color:var(--texto); }
+
+  /* Gráfico "contra": quién reclama, a quién sí y a quién no */
+  .fila { position:relative; height:118px; margin-bottom:34px; }
+  .chip { position:absolute; top:10px; height:98px; display:flex; align-items:center; gap:16px; padding:0 30px; border-radius:22px; font-size:38px; font-weight:800; white-space:nowrap; }
+  .chip.de { left:0; background:var(--carbon); color:var(--hueso); }
+  .chip.si { right:0; background:var(--amarillo); color:var(--carbon); }
+  .chip.no { right:0; background:var(--celda); color:var(--gris); }
+  .chip svg { width:40px; height:40px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+  .flecha { position:absolute; top:57px; height:6px; background:var(--carbon); border-radius:3px; transform-origin:0 50%; }
+  .flecha::after { content:""; position:absolute; right:-4px; top:-11px; border-left:22px solid var(--carbon); border-top:14px solid transparent; border-bottom:14px solid transparent; }
+  .flecha.cortada { background:repeating-linear-gradient(90deg, var(--gris) 0 18px, transparent 18px 32px); }
+  .flecha.cortada::after { display:none; }
+  .tache { position:absolute; top:22px; width:76px; height:76px; border-radius:50%; background:var(--blanco); border:5px solid var(--carbon); display:flex; align-items:center; justify-content:center; }
+  .tache svg { width:36px; height:36px; fill:none; stroke:var(--carbon); stroke-width:3.4; stroke-linecap:round; }
+  .raya { position:absolute; left:22px; right:22px; top:50%; height:5px; background:var(--gris); transform-origin:0 50%; }
+
+  /* Gráfico "pasos" */
+  .pasos { position:relative; }
+  .paso { position:relative; display:flex; align-items:center; gap:28px; height:104px; }
+  .paso .n { flex:none; width:76px; height:76px; border-radius:50%; background:var(--amarillo); display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:800; position:relative; z-index:1; }
+  .paso .t { font-size:40px; font-weight:700; line-height:1.1; }
+  .linea { position:absolute; left:36px; top:52px; width:5px; background:var(--carbon); transform-origin:50% 0; }
+
+  /* Gráfico "dato" */
+  .dato .et { font-size:40px; font-weight:600; color:var(--gris); }
+  .dato .val { font-size:200px; line-height:.95; font-weight:800; letter-spacing:-.05em; display:inline-block; position:relative; }
+  .dato .val .m { position:absolute; left:-12px; right:-12px; bottom:18px; height:56px; background:var(--amarillo); transform-origin:0 50%; z-index:-1; }
+  .dato .det { font-size:44px; font-weight:700; margin-top:10px; }
+
+  /* Gráfico "dias" */
+  .dias { display:grid; grid-template-columns:repeat(10,1fr); gap:10px; }
+  .dia { position:relative; aspect-ratio:1; border-radius:12px; background:var(--celda); }
+  .dia b { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; color:var(--gris); z-index:1; }
+  .dia .fill { position:absolute; inset:0; border-radius:12px; opacity:0; }
+  .dia.a .fill { background:var(--carbon); }
+  .dia.b .fill { background:var(--amarillo); }
+  .leyenda { display:flex; gap:44px; margin-top:24px; font-size:30px; font-weight:600; }
+  .leyenda div { display:flex; align-items:center; gap:14px; }
+  .leyenda i { width:28px; height:28px; border-radius:8px; display:block; }
+
+  /* Gráfico "trayecto" */
+  .ruta { position:relative; height:170px; }
   .pista { position:absolute; left:60px; right:60px; top:48px; height:8px; background:var(--carbon); border-radius:4px; transform-origin:0 50%; }
   .nodo { position:absolute; top:12px; width:80px; height:80px; border-radius:50%; background:var(--carbon); display:flex; align-items:center; justify-content:center; }
   .nodo svg { width:40px; height:40px; fill:none; stroke:var(--hueso); stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
@@ -52,12 +118,6 @@
   .punto { position:absolute; left:96px; top:34px; width:36px; height:36px; border-radius:50%; background:var(--amarillo); border:6px solid var(--carbon); }
   .onda { position:absolute; left:395px; top:-3px; width:110px; height:110px; border-radius:50%; border:8px solid var(--amarillo); }
   .evento { position:absolute; left:300px; top:108px; width:300px; text-align:center; font-size:28px; font-weight:800; }
-
-  .afirmacion { position:absolute; left:90px; width:920px; font-size:68px; line-height:1.05; font-weight:800; letter-spacing:-.025em; }
-  .hl { position:relative; display:inline-block; margin-right:.22em; }
-  .hl .m { position:absolute; left:-10px; right:-10px; bottom:6px; height:30px; background:var(--amarillo); transform-origin:0 50%; }
-  .hl span { position:relative; }
-  .fuente { position:absolute; left:90px; font-size:26px; font-weight:500; color:var(--gris); }
 
   .cta { position:absolute; left:0; top:0; width:1080px; height:960px; background:var(--carbon); color:var(--hueso); padding:250px 90px 0; }
   .cta h3 { font-size:96px; line-height:1; font-weight:800; letter-spacing:-.03em; }
@@ -81,20 +141,18 @@
 <div id="root" data-composition-id="reel" data-start="0" data-width="1080" data-height="1920">
   <div class="muestra" id="muestra"><div class="figura" id="figura"><div class="cabeza"></div><div class="cuerpo"></div><p>AVATAR DE HEYGEN</p></div></div>
   <div class="arriba" id="arriba">
-    <div class="marca"><div class="etiqueta" id="etiqueta"></div><img src="assets/logo.png" alt="Canaro Legales"></div>
-    <div class="gancho" id="gancho"></div>
-    <div class="ruta" id="ruta">
-      <div class="pista" id="pista"></div>
-      <div class="nodo a" id="na"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg></div>
-      <div class="nodo b" id="nb"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V4h8v3"/><path d="M3 13h18"/></svg></div>
-      <div class="rotulo a" id="ra"></div>
-      <div class="rotulo b" id="rb"></div>
-      <div class="onda" id="onda"></div>
-      <div class="punto" id="punto"></div>
-      <div class="evento" id="evento"></div>
+    <div class="panel p1" id="p1">
+      <div class="marca" id="marca1"><div class="etiqueta" id="etiqueta"></div><img src="assets/logo.png" alt="Canaro Legales"></div>
+      <div class="gancho" id="gancho"></div>
+      <div class="afirmacion" id="afirmacion"></div>
+      <div class="fuente" id="fuente"></div>
     </div>
-    <div class="afirmacion" id="afirmacion"></div>
-    <div class="fuente" id="fuente"></div>
+    <div class="panel p2" id="p2">
+      <div class="marca" id="marca2"><div class="etiqueta" id="etiqueta2"></div><img src="assets/logo.png" alt="Canaro Legales"></div>
+      <div class="titulo2" id="titulo2"></div>
+      <div class="graf" id="graf"></div>
+      <div class="nota2" id="nota2"></div>
+    </div>
     <div class="cta" id="cta">
       <h3 id="ctaT"></h3>
       <p id="ctaD"></p>
@@ -110,48 +168,155 @@
   const palabras = (t, cls) => esc(t).split(/\s+/).filter(Boolean).map((w) => '<span class="' + (cls || "w") + '">' + w + "</span>").join("");
   const conResaltado = (t) => esc(t).split(/(\*[^*]+\*)/).map((p) =>
     /^\*.+\*$/.test(p) ? '<span class="hl"><i class="m"></i><span>' + p.slice(1, -1) + "</span></span>" : palabras(p)).join("");
+  const ICONO = {
+    persona: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
+    escudo: '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/></svg>',
+    edificio: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 21v-4h6v4M8 7h2M14 7h2M8 11h2M14 11h2"/></svg>',
+    x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    casa: '<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+    trabajo: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V4h8v3"/><path d="M3 13h18"/></svg>'
+  };
 
+  // ---------- Textos ----------
   $("etiqueta").textContent = v.etiqueta || "";
-  if (!v.etiqueta) $("etiqueta").style.visibility = "hidden";
+  $("etiqueta2").textContent = v.etiqueta || "";
+  if (!v.etiqueta) { $("etiqueta").style.visibility = "hidden"; $("etiqueta2").style.visibility = "hidden"; }
   $("gancho").innerHTML = palabras(v.gancho);
   $("afirmacion").innerHTML = conResaltado(v.afirmacion);
   $("fuente").textContent = v.fuente || "";
-  $("ra").textContent = v.origen || "";
-  $("rb").textContent = v.destino || "";
-  $("evento").textContent = v.evento || "";
+  $("titulo2").innerHTML = conResaltado(v.titulo2 || "");
+  $("nota2").textContent = v.nota2 || "";
   $("ctaT").innerHTML = esc(v.cta_titulo) + "<em>" + esc(v.cta_resaltado) + "</em>";
   $("ctaD").textContent = v.cta_detalle || "";
   $("ctaBt").textContent = v.cta_boton || "";
 
-  // Ubicación vertical según el alto real del gancho y de la afirmación
-  const conRuta = v.grafico === "trayecto";
-  if (!conRuta) $("ruta").remove();
-  // Si el texto no entra en el panel (hasta 920 px), achica gancho y afirmación de a poco
-  let escala = 1;
-  function ubicar() {
-    $("gancho").style.fontSize = Math.round(80 * escala) + "px";
-    $("afirmacion").style.fontSize = Math.round(68 * escala) + "px";
-    let y = 330 + $("gancho").offsetHeight + 46;
-    if (conRuta) { $("ruta").style.top = y + "px"; y += 170 + 30; } else { y += 20; }
+  // ---------- Gráfico del panel 2 ----------
+  const tipos = ["contra", "pasos", "dato", "dias", "trayecto"];
+  const grafico = tipos.includes(v.grafico) ? v.grafico : "ninguno";
+  const listaPasos = (Array.isArray(v.pasos) ? v.pasos : String(v.pasos || "").split("|")).map((s) => String(s).trim()).filter(Boolean).slice(0, 3);
+  let g = "";
+  if (grafico === "contra") {
+    g = '<div class="fila" id="fs"><div class="chip de">' + ICONO.persona + esc(v.quien || "Vos") + '</div>' +
+        '<div class="flecha" id="fls"></div><div class="chip si" id="csi">' + ICONO.escudo + esc(v.si) + '</div></div>' +
+        '<div class="fila" id="fn"><div class="chip de">' + ICONO.persona + esc(v.quien || "Vos") + '</div>' +
+        '<div class="flecha cortada" id="fln"></div><div class="tache" id="tache">' + ICONO.x + '</div>' +
+        '<div class="chip no" id="cno">' + ICONO.edificio + esc(v.no) + '<i class="raya" id="raya"></i></div></div>';
+  } else if (grafico === "pasos") {
+    g = '<div class="pasos"><i class="linea" id="linea"></i>' + listaPasos.map((p, i) =>
+        '<div class="paso"><span class="n">' + (i + 1) + '</span><span class="t">' + esc(p) + '</span></div>').join("") + '</div>';
+  } else if (grafico === "dato") {
+    g = '<div class="dato"><div class="et">' + esc(v.dato_etiqueta) + '</div><div class="val" id="val"><i class="m"></i>' + esc(v.valor) +
+        '</div><div class="det">' + esc(v.dato_detalle) + '</div></div>';
+  } else if (grafico === "dias") {
+    const total = Math.max(10, Math.min(40, Number(v.dias_total) || 30));
+    const a = Math.max(1, Math.min(total - 1, Number(v.dias_a) || 10));
+    let celdas = "";
+    for (let d = 1; d <= total; d++) celdas += '<div class="dia ' + (d <= a ? "a" : "b") + '"><span class="fill"></span><b>' + d + "</b></div>";
+    g = '<div class="dias">' + celdas + '</div><div class="leyenda"><div><i style="background:var(--carbon)"></i>' + esc(v.leyenda_a) +
+        '</div><div><i style="background:var(--amarillo)"></i>' + esc(v.leyenda_b) + '</div></div>';
+  } else if (grafico === "trayecto") {
+    g = '<div class="ruta"><div class="pista" id="pista"></div><div class="nodo a" id="na">' + ICONO.casa + '</div><div class="nodo b" id="nb">' + ICONO.trabajo +
+        '</div><div class="rotulo a" id="ra">' + esc(v.origen) + '</div><div class="rotulo b" id="rb">' + esc(v.destino) +
+        '</div><div class="onda" id="onda"></div><div class="punto" id="punto"></div><div class="evento" id="evento">' + esc(v.evento) + '</div></div>';
+  }
+  $("graf").innerHTML = g;
+
+  // Flechas del gráfico "contra": van del chip de la izquierda al de la derecha
+  if (grafico === "contra") {
+    ["s", "n"].forEach((k) => {
+      const fila = $("f" + k), de = fila.querySelector(".chip.de"), a = fila.querySelector(".chip.si, .chip.no"), fl = $("fl" + k);
+      const x0 = de.offsetWidth + 24, x1 = 900 - a.offsetWidth - 34;
+      fl.style.left = x0 + "px"; fl.style.width = Math.max(40, x1 - x0) + "px";
+      if (k === "n") $("tache").style.left = Math.round((x0 + x1) / 2 - 38) + "px";
+    });
+  }
+
+  // ---------- Ubicación vertical (achica el texto si no entra hasta 920 px) ----------
+  let e1 = 1;
+  function ubicar1() {
+    $("gancho").style.fontSize = Math.round(80 * e1) + "px";
+    $("afirmacion").style.fontSize = Math.round(68 * e1) + "px";
+    const y = 330 + $("gancho").offsetHeight + 56;
     $("afirmacion").style.top = y + "px";
     const yf = y + $("afirmacion").offsetHeight + 22;
     $("fuente").style.top = yf + "px";
     return yf + 32;
   }
-  while (ubicar() > 920 && escala > 0.62) escala -= 0.04;
+  while (ubicar1() > 920 && e1 > 0.62) e1 -= 0.04;
 
+  let e2 = 1;
+  function ubicar2() {
+    $("titulo2").style.fontSize = Math.round(66 * e2) + "px";
+    $("graf").style.transform = "scale(" + e2 + ")";
+    $("graf").style.transformOrigin = "0 0";
+    const y = 330 + $("titulo2").offsetHeight + 50;
+    $("graf").style.top = y + "px";
+    const yn = y + $("graf").offsetHeight * e2 + 36;
+    $("nota2").style.top = yn + "px";
+    return yn + ($("nota2").textContent ? $("nota2").offsetHeight : 0);
+  }
+  while (ubicar2() > 920 && e2 > 0.6) e2 -= 0.04;
+
+  // ---------- Tiempos ----------
   const E = "power3.out";
   const entrada = Math.max(0, Number(v.entrada) || 0);
-  const desde = Math.max(entrada + 3, Number(v.cta_desde) || 8.1);
+  const desde = Math.max(entrada + 5, Number(v.cta_desde) || 12);
+  let cambio = Number(v.cambio) || (entrada + desde) / 2;
+  cambio = Math.min(Math.max(cambio, entrada + 2.5), desde - 2.5);
   const tl = gsap.timeline({ paused: true });
 
-  // Hasta "entrada" el avatar ocupa toda la pantalla; después baja el panel con el gráfico
+  // Panel 1: baja desde arriba mientras el avatar pasa a la mitad inferior
   tl.fromTo("#arriba", { yPercent: -100 }, { yPercent: 0, duration: 0.6, ease: "power3.inOut" }, entrada);
   let t = entrada + 0.35;
-  tl.fromTo(".marca", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.4, ease: E }, t);
+  tl.fromTo("#marca1", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.4, ease: E }, t);
   tl.fromTo("#gancho .w", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: E }, t + 0.1);
-  t += 0.1 + document.querySelectorAll("#gancho .w").length * 0.06 + 0.35;
-  if (conRuta) {
+  t += 0.1 + document.querySelectorAll("#gancho .w").length * 0.06 + 0.3;
+  tl.fromTo("#afirmacion .w, #afirmacion .hl", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: E }, t);
+  tl.fromTo("#afirmacion .m", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.out" }, t + 0.5);
+  tl.fromTo("#fuente", { opacity: 0 }, { opacity: 1, duration: 0.4 }, t + 0.9);
+
+  // Panel 2: entra desde la derecha y anima su gráfico
+  tl.fromTo("#p2", { xPercent: 100 }, { xPercent: 0, duration: 0.7, ease: "power3.inOut" }, cambio);
+  t = cambio + 0.5;
+  tl.fromTo("#marca2", { opacity: 0 }, { opacity: 1, duration: 0.3 }, t);
+  tl.fromTo("#titulo2 .w, #titulo2 .hl", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.06, ease: E }, t);
+  tl.fromTo("#titulo2 .m", { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "power2.out" }, t + 0.45);
+  t += 0.7;
+  if (grafico === "contra") {
+    tl.fromTo("#fs .chip.de", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.35, ease: E }, t)
+      .fromTo("#fls", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.inOut" }, t + 0.25)
+      .fromTo("#csi", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2)" }, t + 0.7)
+      .fromTo("#fn .chip.de", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.35, ease: E }, t + 1.2)
+      .fromTo("#fln", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.inOut" }, t + 1.45)
+      .fromTo("#cno", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.35, ease: E }, t + 1.8)
+      .fromTo("#raya", { scaleX: 0 }, { scaleX: 1, duration: 0.35, ease: "power2.out" }, t + 2.1)
+      .fromTo("#tache", { opacity: 0, scale: 0.2 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(3)" }, t + 2.1);
+    t += 2.6;
+  } else if (grafico === "pasos") {
+    const n = listaPasos.length;
+    $("graf").querySelector(".linea").style.height = Math.max(0, (n - 1) * 104) + "px";
+    tl.fromTo("#linea", { scaleY: 0 }, { scaleY: 1, duration: 0.5 * Math.max(1, n - 1), ease: "none" }, t + 0.2);
+    tl.fromTo("#graf .paso .n", { scale: 0 }, { scale: 1, duration: 0.35, stagger: 0.5, ease: "back.out(2)" }, t);
+    tl.fromTo("#graf .paso .t", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.5, ease: E }, t + 0.1);
+    t += n * 0.5 + 0.4;
+  } else if (grafico === "dato") {
+    tl.fromTo("#graf .et", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.35 }, t)
+      .fromTo("#val", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.6, ease: "back.out(2)" }, t + 0.2)
+      .fromTo("#val .m", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.out" }, t + 0.7)
+      .fromTo("#graf .det", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4 }, t + 0.9);
+    t += 1.4;
+  } else if (grafico === "dias") {
+    const celdas = document.querySelectorAll("#graf .dia"), a = document.querySelectorAll("#graf .dia.a").length;
+    tl.fromTo(celdas, { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.25, stagger: 0.015, ease: E }, t);
+    t += celdas.length * 0.015 + 0.2;
+    tl.fromTo("#graf .dia.a .fill", { opacity: 0 }, { opacity: 1, duration: 0.15, stagger: 0.05 }, t)
+      .to("#graf .dia.a b", { color: "#ECE8E1", duration: 0.15, stagger: 0.05 }, t)
+      .fromTo("#graf .leyenda div", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.35, stagger: 0.15 }, t + 0.2);
+    t += a * 0.05 + 0.3;
+    tl.fromTo("#graf .dia.b .fill", { opacity: 0 }, { opacity: 1, duration: 0.15, stagger: 0.04 }, t)
+      .to("#graf .dia.b b", { color: "#1B1A19", duration: 0.15, stagger: 0.04 }, t);
+    t += (celdas.length - a) * 0.04 + 0.2;
+  } else if (grafico === "trayecto") {
     tl.fromTo("#pista", { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: "power2.inOut" }, t)
       .fromTo("#na, #nb", { scale: 0 }, { scale: 1, duration: 0.4, stagger: 0.45, ease: "back.out(2)" }, t - 0.1)
       .fromTo("#ra, #rb", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.45 }, t + 0.1)
@@ -159,12 +324,11 @@
       .to("#punto", { x: 336, duration: 0.8, ease: "power2.in" }, t + 0.85)
       .fromTo("#onda", { opacity: 0, scale: 0.2 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(3)" }, t + 1.6)
       .fromTo("#evento", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35 }, t + 1.75);
-    t += 2.0;
+    t += 2.1;
   }
-  tl.fromTo("#afirmacion .w, #afirmacion .hl", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: E }, t);
-  tl.fromTo("#afirmacion .m", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.out" }, t + 0.5);
-  tl.fromTo("#fuente", { opacity: 0 }, { opacity: 1, duration: 0.4 }, t + 0.9);
+  tl.fromTo("#nota2", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4 }, Math.min(t, desde - 0.6));
 
+  // Cierre: CTA de WhatsApp
   tl.fromTo("#cta", { yPercent: 100 }, { yPercent: 0, duration: 0.7, ease: "power3.inOut" }, desde);
   tl.fromTo("#ctaT, #ctaD, #ctaB", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.12, ease: E }, desde + 0.4);
 
@@ -191,7 +355,7 @@
   }
 
   // El largo del render lo da la línea de tiempo: se extiende hasta la duración pedida
-  const dur = Math.max(Number(v.duracion) || 10.5, desde + 1.6);
+  const dur = Math.max(Number(v.duracion) || 14.5, desde + 1.6);
   tl.set({}, {}, dur);
   window.__timelines["reel"] = tl;
 </script>

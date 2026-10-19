@@ -358,10 +358,19 @@ def fin_del_gancho(palabras):
     return 2.5
 
 
+def inicios_de_oracion(palabras):
+    """Segundos en que empieza cada oración dicha (la primera palabra y cada una que sigue a un punto)."""
+    res = []
+    for k, p in enumerate(palabras):
+        if k == 0 or re.search(r"[.!?…]$", str(palabras[k - 1]["w"])):
+            res.append(float(p["s"]))
+    return res
+
+
 def renderizar_panel(variables, destino):
     archivo = TRABAJO / "variables-panel.json"
     archivo.write_text(json.dumps(variables, ensure_ascii=False), encoding="utf-8")
-    print("Renderizando el panel con HyperFrames:", json.dumps({k: variables[k] for k in ("entrada", "cta_desde", "duracion")}))
+    print("Renderizando el panel con HyperFrames:", json.dumps({k: variables[k] for k in ("entrada", "cambio", "cta_desde", "duracion")}))
     subprocess.run([
         "npx", "--yes", HYPERFRAMES, "render", str(ANIMADO), "-c", "reel.html", "--format", "mov",
         "--variables-file", str(archivo), "-o", str(destino), "--quiet",
@@ -378,9 +387,15 @@ def componer_dividido(datos, entrada, palabras, total):
 
     t_entrada = float(animado.get("entrada") or fin_del_gancho(palabras))
     t_cta = inicio_ultima_oracion(palabras) if palabras else None
-    if t_cta is None or t_cta < t_entrada + 3:
-        t_cta = max(t_entrada + 3, total - 3.5)
-    variables = dict(animado, entrada=round(t_entrada, 2), cta_desde=round(t_cta, 2),
+    if t_cta is None or t_cta < t_entrada + 5:
+        t_cta = max(t_entrada + 5, total - 3.5)
+    # Panel 2: entra con la primera oración que empieza al menos 2,5 s después del panel 1
+    # (normalmente la tercera: en el molde T36 la segunda es la afirmación). Si no hay, a mitad de camino.
+    oraciones = [t for t in inicios_de_oracion(palabras) if t > t_entrada + 2.5 and t < t_cta - 2.5]
+    t_cambio = float(animado.get("cambio") or (oraciones[0] if oraciones else (t_entrada + t_cta) / 2))
+    if isinstance(animado.get("pasos"), list):
+        animado = dict(animado, pasos="|".join(str(x) for x in animado["pasos"]))
+    variables = dict(animado, entrada=round(t_entrada, 2), cambio=round(t_cambio, 2), cta_desde=round(t_cta, 2),
                      duracion=round(total, 2), vista_previa=False)
     capa = renderizar_panel(variables, TRABAJO / "panel.mov")
 
@@ -407,7 +422,7 @@ def componer_dividido(datos, entrada, palabras, total):
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
     salida = TRABAJO / "final.mp4"
-    print(f"Componiendo en pantalla dividida: panel desde {e:.2f} s, CTA desde {t_cta:.2f} s, ventana del avatar desde y={y0}")
+    print(f"Componiendo en pantalla dividida: panel 1 desde {e:.2f} s, panel 2 desde {t_cambio:.2f} s, CTA desde {t_cta:.2f} s, ventana del avatar desde y={y0}")
     subprocess.run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada), "-i", str(capa),
         "-filter_complex", ";".join(filtros), "-map", f"[{ultimo}]", "-map", "0:a?",
