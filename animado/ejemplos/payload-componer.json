@@ -1,0 +1,20 @@
+{
+  "id": "T70",
+  "video_id": "id-del-video-en-heygen",
+  "video_url": "https://direccion-del-video-de-heygen.mp4",
+  "tiempos": [],
+  "animado": {
+    "etiqueta": "ACCIDENTE IN ITINERE",
+    "gancho": "¿Te accidentaste yendo al trabajo?",
+    "grafico": "trayecto",
+    "origen": "Casa",
+    "destino": "Trabajo",
+    "evento": "Accidente",
+    "afirmacion": "También lo cubre *la ART.*",
+    "fuente": "Art. 6, Ley 24.557",
+    "cta_titulo": "¿Te pasó?",
+    "cta_resaltado": "Escribinos.",
+    "cta_detalle": "Te orientamos sin costo. Solo cobramos si vos cobrás.",
+    "cta_boton": "WhatsApp · link en el perfil"
+  }
+}

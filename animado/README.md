@@ -17,3 +17,11 @@ Render local:
     npx --yes hyperframes@0.8.173 render . -c reel.html --format mov --variables '{"vista_previa":false}' -o capa.mov
 
 En GitHub: Actions > "Render animado" > Run workflow (o repository_dispatch `render-animado`).
+
+## Reel en pantalla dividida (componer-video)
+
+Si el payload de `componer-video` trae la clave `animado` (ver `ejemplos/payload-componer.json`),
+`video/componer.py` arma el Reel así: el avatar arranca a pantalla completa mientras dice el gancho,
+al terminar la primera oración baja a la mitad inferior y arriba entra el panel; el CTA entra en el
+panel cuando empieza la última oración. Esos tiempos salen solos de `tiempos`. En este modo no se
+usan las placas de PLACAS_VIDEO ni la placa de contacto. Sin `animado`, todo funciona como antes.

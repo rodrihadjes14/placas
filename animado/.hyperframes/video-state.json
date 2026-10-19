@@ -17,9 +17,9 @@
   },
   "renders": {
     "latest": {
-      "id": "d22f11e6-f2a1-47ca-a79d-ae286ebc5160",
-      "completedAt": 1792379117933,
-      "output": "/tmp/claude-0/out/reel-prueba.mp4",
+      "id": "f39e6ddd-2c9c-475d-8483-7ff321170ee4",
+      "completedAt": 1792379858113,
+      "output": "/tmp/claude-0/test/trabajo/panel.mov",
       "status": "completed",
       "revision": null
     },

@@ -2,6 +2,7 @@ name: Componer video
 
 # Lo dispara VideosHeyGen.gs cuando HeyGen termina un video.
 # Superpone placas y subtítulos, y sube el resultado a Cloudinary como final-<ID>-<VIDEO_ID>.
+# Si el payload trae "animado", arma el Reel en pantalla dividida con el panel de HyperFrames.
 on:
   repository_dispatch:
     types: [componer-video]
@@ -13,7 +14,7 @@ concurrency:
 jobs:
   componer:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: video
@@ -30,6 +31,15 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
           pip install -q playwright "opencv-python-headless<5"
           python -m playwright install --with-deps chromium
+
+      - uses: actions/setup-node@v4
+        if: github.event.client_payload.animado
+        with:
+          node-version: '22'
+
+      - name: Preparar HyperFrames
+        if: github.event.client_payload.animado
+        run: npx --yes hyperframes@0.8.173 browser ensure
 
       - name: Componer
         env:

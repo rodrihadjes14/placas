@@ -11,6 +11,11 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
                de la pestaña Avatares y sirve para forzar la ubicación de las placas en un look.
     contacto   opcional, true por defecto: agrega la placa "Escribinos por WhatsApp / Link en nuestro
                perfil" durante la última oración del video (la llamada a la acción).
+    animado    opcional: textos del panel animado (variables de animado/reel.html: etiqueta, gancho,
+               grafico, origen, destino, evento, afirmacion, fuente, cta_*). Si viene, el video se arma
+               en pantalla dividida: el avatar arranca a pantalla completa durante el gancho, después
+               baja a la mitad inferior y arriba entra el panel de HyperFrames; el CTA entra en el
+               panel durante la última oración. En ese modo no se usan las placas ni la placa de contacto.
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
                el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
@@ -337,11 +342,90 @@ def ventanas_placas(placas, palabras, total):
     return res
 
 
+# Pantalla dividida (HyperFrames)
+ANIMADO = AQUI.parent / "animado"
+HYPERFRAMES = "hyperframes@0.8.173"
+MITAD = 960                  # alto del panel y de la ventana del avatar
+TRANSICION = 0.6             # segundos que tarda el avatar en bajar a la mitad inferior
+AIRE_CABEZA = 110            # aire entre el borde de la ventana y la cabeza
+
+
+def fin_del_gancho(palabras):
+    """Segundo en que termina la primera oración (el gancho): ahí entra el panel."""
+    for p in palabras:
+        if re.search(r"[.!?…]$", str(p["w"])):
+            return min(max(float(p["e"]) + 0.1, 1.2), 6.0)
+    return 2.5
+
+
+def renderizar_panel(variables, destino):
+    archivo = TRABAJO / "variables-panel.json"
+    archivo.write_text(json.dumps(variables, ensure_ascii=False), encoding="utf-8")
+    print("Renderizando el panel con HyperFrames:", json.dumps({k: variables[k] for k in ("entrada", "cta_desde", "duracion")}))
+    subprocess.run([
+        "npx", "--yes", HYPERFRAMES, "render", str(ANIMADO), "-c", "reel.html", "--format", "mov",
+        "--variables-file", str(archivo), "-o", str(destino), "--quiet",
+    ], check=True)
+    return destino
+
+
+def componer_dividido(datos, entrada, palabras, total):
+    animado = datos.get("animado") or {}
+    if isinstance(animado, str):
+        animado = json.loads(animado)
+    cara = detectar_cara(entrada)
+    print("Cara detectada:", cara if cara else "no (se usan posiciones por defecto)")
+
+    t_entrada = float(animado.get("entrada") or fin_del_gancho(palabras))
+    t_cta = inicio_ultima_oracion(palabras) if palabras else None
+    if t_cta is None or t_cta < t_entrada + 3:
+        t_cta = max(t_entrada + 3, total - 3.5)
+    variables = dict(animado, entrada=round(t_entrada, 2), cta_desde=round(t_cta, 2),
+                     duracion=round(total, 2), vista_previa=False)
+    capa = renderizar_panel(variables, TRABAJO / "panel.mov")
+
+    cabeza = cara["cabeza"] if cara else 420
+    y0 = int(min(max(cabeza - AIRE_CABEZA, 0), 1920 - MITAD))
+    if cara:
+        sub_y = min(max(MITAD + (cara["menton"] - y0) + 40, 1250), 1460)
+    else:
+        sub_y = 1440
+    e, d = t_entrada, TRANSICION
+    y_expr = f"if(lt(t,{e + d:.3f}),{y0}+({MITAD - y0})*(1-pow(1-(t-{e:.3f})/{d},3)),{MITAD})"
+    filtros = [
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,split[completo][fuente]",
+        f"[fuente]crop=1080:{MITAD}:0:{y0}[ventana]",
+        f"[completo][ventana]overlay=x=0:y='{y_expr}':enable='gte(t,{e:.3f})'[base]",
+        "[1:v]format=yuva444p10le[panel]",
+        "[base][panel]overlay=0:0:eof_action=repeat[v1]",
+    ]
+    ultimo = "v1"
+    if palabras:
+        ass = TRABAJO / "subtitulos.ass"
+        escribir_ass(palabras, ass, sub_y)
+        fuentes = str(AQUI / "fuentes").replace(":", "\\:")
+        filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
+        ultimo = "vf"
+    salida = TRABAJO / "final.mp4"
+    print(f"Componiendo en pantalla dividida: panel desde {e:.2f} s, CTA desde {t_cta:.2f} s, ventana del avatar desde y={y0}")
+    subprocess.run([
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada), "-i", str(capa),
+        "-filter_complex", ";".join(filtros), "-map", f"[{ultimo}]", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{total:.2f}", str(salida),
+    ], check=True)
+    return salida
+
+
 def componer(datos):
     TRABAJO.mkdir(parents=True, exist_ok=True)
     entrada = TRABAJO / "entrada.mp4"
-    print("Descargando el video de HeyGen")
-    urllib.request.urlretrieve(datos["video_url"], entrada)
+    origen = str(datos["video_url"])
+    if pathlib.Path(origen).is_file():          # pruebas locales con un archivo
+        entrada.write_bytes(pathlib.Path(origen).read_bytes())
+    else:
+        print("Descargando el video de HeyGen")
+        urllib.request.urlretrieve(origen, entrada)
     total = duracion(entrada)
 
     palabras = [p for p in (datos.get("tiempos") or []) if str(p.get("w", "")).strip()]
@@ -359,6 +443,9 @@ def componer(datos):
             total = duracion(entrada)
         else:
             print("Aviso: no se encontraron todos los cortes; el video queda sin cambio de encuadre")
+
+    if datos.get("animado"):
+        return componer_dividido(datos, entrada, palabras, total)
 
     ventanas = ventanas_placas(placas, palabras, total)
     if palabras and datos.get("contacto", True):
