@@ -1,0 +1,15 @@
+{
+  "numero": "02",
+  "total": "05",
+  "fondo": "blanco",
+  "etiqueta": "LICENCIA POR ACCIDENTE",
+  "titulo": "¿Quién te paga los días de baja?",
+  "grafico": "dias",
+  "dias_total": 30,
+  "dias_a": 10,
+  "leyenda_a": "Empleador",
+  "leyenda_b": "ART",
+  "afirmacion": "Desde el día 11, *la paga la ART.*",
+  "fuente": "Art. 13, Ley 24.557",
+  "pie": "Deslizá →"
+}

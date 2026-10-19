@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es" data-composition-variables='[
+  {"id":"numero","type":"string","label":"Número de diapositiva","default":"02"},
+  {"id":"total","type":"string","label":"Total de diapositivas","default":"05"},
+  {"id":"fondo","type":"enum","label":"Fondo","default":"blanco","options":[{"value":"blanco","label":"Blanco"},{"value":"hueso","label":"Hueso"},{"value":"carbon","label":"Carbón"}]},
+  {"id":"etiqueta","type":"string","label":"Etiqueta","default":"LICENCIA POR ACCIDENTE"},
+  {"id":"titulo","type":"string","label":"Gancho o título","default":"¿Quién te paga los días de baja?"},
+  {"id":"grafico","type":"enum","label":"Gráfico","default":"dias","options":[{"value":"dias","label":"Grilla de días"},{"value":"ninguno","label":"Sin gráfico"}]},
+  {"id":"dias_total","type":"number","label":"Días de la grilla","default":30,"min":10,"max":40},
+  {"id":"dias_a","type":"number","label":"Días del primer tramo","default":10,"min":1,"max":39},
+  {"id":"leyenda_a","type":"string","label":"Leyenda del primer tramo","default":"Empleador"},
+  {"id":"leyenda_b","type":"string","label":"Leyenda del segundo tramo","default":"ART"},
+  {"id":"afirmacion","type":"string","label":"Afirmación (resaltado entre asteriscos)","default":"Desde el día 11, *la paga la ART.*"},
+  {"id":"fuente","type":"string","label":"Fuente legal","default":"Art. 13, Ley 24.557"},
+  {"id":"pie","type":"string","label":"Texto del pie","default":"Deslizá →"}
+]'>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1350" />
+<title>Carrusel animado · Estudio Canaro</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+  /* Sistema "Grotesca expresiva": Bricolage Grotesque, neutros y amarillo como único acento. */
+  @font-face { font-family: "Bricolage"; src: url("assets/fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
+  :root { --amarillo:#F2C230; --carbon:#1B1A19; --hueso:#ECE8E1; --blanco:#FFFFFF; --texto:#2B2A28; --gris:#7C7873; --celda:#EEECE8; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1350px; overflow:hidden; background:var(--blanco); }
+  #root { position:relative; width:100%; height:100%; overflow:hidden; font-family:"Bricolage", Arial, sans-serif; color:var(--texto); }
+  #root .clip { position:absolute; inset:0; }
+  .fondo { position:absolute; inset:0; background:var(--blanco); }
+  .f-hueso .fondo { background:var(--hueso); }
+  .f-carbon .fondo { background:var(--carbon); }
+  #root.f-carbon { color:var(--hueso); }
+
+  .num { position:absolute; left:90px; top:80px; font-size:40px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .num small { font-size:28px; font-weight:500; color:var(--gris); }
+  .etiqueta { position:absolute; left:90px; top:190px; font-size:26px; font-weight:700; letter-spacing:.14em; color:var(--gris); }
+  .titulo { position:absolute; left:90px; top:240px; width:900px; font-size:86px; line-height:1.03; font-weight:800; letter-spacing:-.03em; }
+  .w { display:inline-block; margin-right:.22em; }
+
+  .dias { position:absolute; left:90px; top:540px; width:900px; display:grid; grid-template-columns:repeat(10,1fr); gap:12px; }
+  .dia { position:relative; aspect-ratio:1; border-radius:14px; background:var(--celda); }
+  .f-carbon .dia { background:#33312E; }
+  .dia b { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:700; color:var(--gris); font-variant-numeric:tabular-nums; z-index:1; }
+  .dia .fill { position:absolute; inset:0; border-radius:14px; opacity:0; }
+  .dia.a .fill { background:var(--carbon); }
+  .f-carbon .dia.a .fill { background:var(--hueso); }
+  .dia.b .fill { background:var(--amarillo); }
+  .leyenda { position:absolute; left:90px; display:flex; gap:48px; font-size:30px; font-weight:600; }
+  .leyenda div { display:flex; align-items:center; gap:14px; }
+  .leyenda i { width:30px; height:30px; border-radius:8px; display:block; }
+  .leyenda .ia { background:var(--carbon); }
+  .f-carbon .leyenda .ia { background:var(--hueso); }
+  .leyenda .ib { background:var(--amarillo); }
+
+  .afirmacion { position:absolute; left:90px; width:900px; font-size:66px; font-weight:800; letter-spacing:-.025em; line-height:1.1; }
+  .hl { position:relative; display:inline-block; margin-right:.22em; }
+  .hl .m { position:absolute; left:-8px; right:-8px; bottom:6px; height:28px; background:var(--amarillo); z-index:-1; transform-origin:0 50%; }
+  .hl span { position:relative; }
+  .f-carbon .hl .m { display:none; }
+  .f-carbon .hl { color:var(--amarillo); }
+  .fuente { position:absolute; left:90px; font-size:26px; font-weight:500; color:var(--gris); }
+
+  .pie { position:absolute; left:0; bottom:0; width:1080px; height:110px; background:var(--hueso); display:flex; align-items:center; justify-content:space-between; padding:0 90px; }
+  .f-hueso .pie { background:var(--blanco); }
+  .f-carbon .pie { background:#262422; }
+  .pie img { height:62px; width:auto; }
+  .pie .logo-claro { display:none; }
+  .f-carbon .pie .logo-oscuro { display:none; }
+  .f-carbon .pie .logo-claro { display:block; }
+  .pie span { font-size:24px; font-weight:700; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="carrusel" data-start="0" data-duration="7" data-width="1080" data-height="1350">
+  <section id="escena" class="clip" data-start="0" data-duration="7" data-track-index="0">
+    <div class="fondo"></div>
+    <div class="num" id="num"></div>
+    <div class="etiqueta" id="etiqueta"></div>
+    <div class="titulo" id="titulo"></div>
+    <div class="dias" id="dias"></div>
+    <div class="leyenda" id="leyenda"><div><i class="ia"></i><span id="la"></span></div><div><i class="ib"></i><span id="lb"></span></div></div>
+    <div class="afirmacion" id="afirmacion"></div>
+    <div class="fuente" id="fuente"></div>
+    <div class="pie"><img class="logo-oscuro" src="assets/logo.png" alt="Canaro Legales"><img class="logo-claro" src="assets/logo-blanco.png" alt="Canaro Legales"><span id="pie"></span></div>
+  </section>
+</div>
+<script>
+  const v = window.__hyperframes.getVariables();
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const palabras = (t) => esc(t).split(/\s+/).filter(Boolean).map((w) => '<span class="w">' + w + "</span>").join("");
+  // *frase* → bloque resaltado que se marca en amarillo
+  const conResaltado = (t) => esc(t).split(/(\*[^*]+\*)/).map((p) =>
+    /^\*.+\*$/.test(p) ? '<span class="hl"><i class="m"></i><span>' + p.slice(1, -1) + "</span></span>"
+      : p.split(/\s+/).filter(Boolean).map((w) => '<span class="w">' + w + "</span>").join("")).join("");
+
+  $("root").classList.add("f-" + (v.fondo || "blanco"));
+  $("num").innerHTML = esc(v.numero) + "<small> / " + esc(v.total) + "</small>";
+  $("etiqueta").textContent = v.etiqueta || "";
+  $("titulo").innerHTML = palabras(v.titulo);
+  $("afirmacion").innerHTML = conResaltado(v.afirmacion);
+  $("fuente").textContent = v.fuente || "";
+  $("pie").textContent = v.pie || "";
+
+  // Ubicación vertical según el alto real del título y si hay gráfico
+  const conGrafico = v.grafico === "dias";
+  const finTitulo = 240 + $("titulo").offsetHeight;
+  let y = finTitulo + 70;
+  const total = Math.max(10, Math.min(40, Number(v.dias_total) || 30));
+  const tramoA = Math.max(1, Math.min(total - 1, Number(v.dias_a) || 10));
+  if (conGrafico) {
+    let html = "";
+    for (let d = 1; d <= total; d++) html += '<div class="dia ' + (d <= tramoA ? "a" : "b") + '"><span class="fill"></span><b>' + d + "</b></div>";
+    $("dias").innerHTML = html;
+    $("dias").style.top = y + "px";
+    y += $("dias").offsetHeight + 40;
+    $("leyenda").style.top = y + "px";
+    $("la").textContent = v.leyenda_a || "";
+    $("lb").textContent = v.leyenda_b || "";
+    y += 80;
+  } else {
+    $("dias").remove();
+    $("leyenda").remove();
+    y = Math.max(y, 620);
+  }
+  $("afirmacion").style.top = y + "px";
+  $("fuente").style.top = (y + $("afirmacion").offsetHeight + 28) + "px";
+
+  const E = "power3.out";
+  const tl = gsap.timeline({ paused: true });
+  tl.fromTo("#etiqueta", { opacity: 0, y: -16 }, { opacity: 1, y: 0, duration: 0.4 }, 0)
+    .fromTo("#num", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0)
+    .fromTo("#titulo .w", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.07, ease: E }, 0.15);
+  let t = 0.15 + document.querySelectorAll("#titulo .w").length * 0.07 + 0.5;
+  if (conGrafico) {
+    const celdas = document.querySelectorAll("#dias .dia");
+    tl.fromTo(celdas, { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.3, stagger: 0.02, ease: E }, t);
+    t += celdas.length * 0.02 + 0.3;
+    tl.fromTo("#dias .dia.a .fill", { opacity: 0 }, { opacity: 1, duration: 0.18, stagger: 0.06 }, t);
+    tl.to("#dias .dia.a b", { color: v.fondo === "carbon" ? "#1B1A19" : "#ECE8E1", duration: 0.18, stagger: 0.06 }, t);
+    tl.fromTo("#leyenda div", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.15 }, t + 0.2);
+    t += tramoA * 0.06 + 0.4;
+    tl.fromTo("#dias .dia.b .fill", { opacity: 0 }, { opacity: 1, duration: 0.18, stagger: 0.05 }, t);
+    tl.to("#dias .dia.b b", { color: "#1B1A19", duration: 0.18, stagger: 0.05 }, t);
+    t += (total - tramoA) * 0.05 + 0.3;
+  }
+  tl.fromTo("#afirmacion .w, #afirmacion .hl", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: E }, t);
+  tl.fromTo("#afirmacion .m", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.out" }, t + 0.5);
+  tl.fromTo("#fuente", { opacity: 0 }, { opacity: 1, duration: 0.4 }, t + 0.9);
+  window.__timelines["carrusel"] = tl;
+</script>
+</body>
+</html>

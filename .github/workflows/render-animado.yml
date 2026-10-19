@@ -1,0 +1,88 @@
+name: Render animado
+
+# Renderiza una plantilla de animado/ (carrusel o reel) con HyperFrames y sube el video a Cloudinary
+# como animado-<ID>-<plantilla>. También queda como artefacto descargable de la corrida.
+# A mano: Actions > Render animado > Run workflow. Desde Apps Script: repository_dispatch "render-animado"
+# con client_payload {id, plantilla, formato, variables}.
+on:
+  repository_dispatch:
+    types: [render-animado]
+  workflow_dispatch:
+    inputs:
+      id:
+        description: ID de la fila (por ejemplo T70) o "prueba"
+        default: prueba
+      plantilla:
+        description: carrusel o reel
+        default: carrusel
+      formato:
+        description: mp4 (pieza final) o mov (capa transparente para componer)
+        default: mp4
+      variables:
+        description: JSON con los textos (vacío usa el ejemplo de la plantilla)
+        default: ''
+
+concurrency:
+  group: animado-${{ github.event.client_payload.id || github.event.inputs.id }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: animado
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Preparar
+        id: datos
+        env:
+          PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || toJson(github.event.inputs) }}
+        run: |
+          node - <<'JS'
+          const fs = require("fs");
+          const p = JSON.parse(process.env.PAYLOAD);
+          const id = String(p.id || "prueba").trim();
+          if (!/^(T\d{1,4}(-\d{1,2})?|prueba)$/i.test(id)) throw new Error("ID inválido: " + id);
+          const plantilla = String(p.plantilla || "carrusel").trim().toLowerCase();
+          if (!["carrusel", "reel"].includes(plantilla)) throw new Error("Plantilla inválida: " + plantilla);
+          const formato = String(p.formato || "mp4").trim().toLowerCase() === "mov" ? "mov" : "mp4";
+          let vars = p.variables || "";
+          if (typeof vars === "string") vars = vars.trim() ? JSON.parse(vars) : null;
+          if (!vars) vars = JSON.parse(fs.readFileSync(plantilla === "reel" ? "ejemplos/reel-itinere.json" : "ejemplos/carrusel-dias.json", "utf8"));
+          fs.writeFileSync(process.env.RUNNER_TEMP + "/variables.json", JSON.stringify(vars));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${id}\nplantilla=${plantilla}\nformato=${formato}\n`);
+          console.log(`${id} · ${plantilla} · ${formato}`);
+          JS
+
+      - name: Instalar navegador de render
+        run: npx --yes hyperframes@0.8.173 browser ensure
+
+      - name: Renderizar
+        run: |
+          npx --yes hyperframes@0.8.173 render . \
+            -c ${{ steps.datos.outputs.plantilla }}.html \
+            --format ${{ steps.datos.outputs.formato }} \
+            --variables-file "$RUNNER_TEMP/variables.json" \
+            -o "$RUNNER_TEMP/salida.${{ steps.datos.outputs.formato }}" --quiet
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: animado-${{ steps.datos.outputs.id }}-${{ steps.datos.outputs.plantilla }}
+          path: ${{ runner.temp }}/salida.${{ steps.datos.outputs.formato }}
+          retention-days: 7
+
+      - name: Subir a Cloudinary
+        if: steps.datos.outputs.formato == 'mp4'
+        run: |
+          curl -sS --fail-with-body \
+            -F "file=@$RUNNER_TEMP/salida.mp4" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=animado-${{ steps.datos.outputs.id }}-${{ steps.datos.outputs.plantilla }}" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/video/upload
