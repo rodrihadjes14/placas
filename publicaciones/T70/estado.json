@@ -4,5 +4,7 @@
   "formato": "Reel",
   "estado": "error",
   "error": "FB: Graph API 400: Unsupported get request. Object with ID '1060289770319935' does not exist, cannot be loaded due to missing permissions, or does not support this operation. Please read the Graph API documentation at https://developers.facebook.com/docs/graph-api",
-  "fecha": "2026-10-19T22:34:06Z"
+  "fecha": "2026-10-19T22:34:06Z",
+  "fb_id": "1060289770319935",
+  "nota": "FB publicado el 19/10; la consulta de estado posterior falló. fb_id cargado a mano para que el reintento no lo duplique."
 }

@@ -124,7 +124,7 @@ def fb_carrusel(media, caption):
     return graph("POST", f"{PAGINA}/feed", token=tok, message=caption, **params)["id"]
 
 
-def fb_reel(media, caption):
+def fb_reel(media, caption, registrar=None):
     tok = token_pagina()
     inicio = graph("POST", f"{PAGINA}/video_reels", token=tok, upload_phase="start")
     video_id = inicio["video_id"]
@@ -132,15 +132,27 @@ def fb_reel(media, caption):
     pedir(subida, b"", {"Authorization": f"OAuth {tok}", "file_url": media[0]}, metodo="POST")
     graph("POST", f"{PAGINA}/video_reels", token=tok, upload_phase="finish", video_id=video_id,
           video_state="PUBLISHED", description=caption)
+    # Con "finish" aceptado, Facebook ya tiene el Reel y lo publica solo. Se registra el ID en este
+    # momento para que, pase lo que pase con la consulta de estado, un reintento nunca lo vuelva a subir.
+    if registrar:
+        registrar(video_id)
+    # La consulta de estado es solo informativa: justo después de "finish" Facebook puede responder
+    # "Object ... does not exist" durante un rato (el 19/10 eso marcó como fallido un Reel que sí salió).
     limite = time.time() + 15 * 60
     while time.time() < limite:
-        st = graph("GET", video_id, token=tok, fields="status").get("status", {})
+        try:
+            st = graph("GET", video_id, token=tok, fields="status").get("status", {})
+        except RuntimeError as e:
+            print(f"FB: consulta de estado no disponible todavía ({e}); se reintenta")
+            time.sleep(15)
+            continue
         if st.get("video_status") == "error":
             raise RuntimeError("Facebook no pudo procesar el Reel: " + json.dumps(st)[:200])
         if (st.get("publishing_phase") or {}).get("status") == "complete" or st.get("video_status") == "ready":
             return video_id
         time.sleep(10)
-    raise RuntimeError("Facebook tardó demasiado en procesar el Reel")
+    print("FB: no se pudo confirmar el estado del Reel; se da por publicado porque Facebook aceptó la subida")
+    return video_id
 
 
 FUNCIONES = {
@@ -194,8 +206,16 @@ def main():
             if estado.get(clave):
                 continue
             try:
-                estado[clave] = FUNCIONES[t][red](pieza["media"], pieza.get("caption", ""))
+                funcion = FUNCIONES[t][red]
+                if funcion is fb_reel:
+                    def registrar(vid, clave=clave):
+                        estado[clave] = vid
+                        ruta.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
+                    estado[clave] = funcion(pieza["media"], pieza.get("caption", ""), registrar)
+                else:
+                    estado[clave] = funcion(pieza["media"], pieza.get("caption", ""))
                 print(f"{red}: publicada ({estado[clave]})")
+                ruta.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
             except Exception as e:
                 errores.append(f"{red}: {e}")
                 print(f"{red}: error: {e}")
