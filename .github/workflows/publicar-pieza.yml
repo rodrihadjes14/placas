@@ -117,6 +117,7 @@ jobs:
           json.dump(variables, open("animado-variables.json", "w", encoding="utf-8"), ensure_ascii=False)
           print(json.dumps(variables, ensure_ascii=False))
           PY
+          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; }
           cd animado
           npx --yes hyperframes@0.8.173 browser ensure
           npx --yes hyperframes@0.8.173 render . -c post.html --format mp4 \
