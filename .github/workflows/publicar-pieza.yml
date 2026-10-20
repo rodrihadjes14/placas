@@ -72,10 +72,76 @@ jobs:
                    "media": [m.strip() for m in media if m.strip()], "redes": p.get("redes") or "IG,FB"}
           open("pieza.json", "w", encoding="utf-8").write(json.dumps(pieza, ensure_ascii=False))
           modo = "publicar" if os.environ.get("GITHUB_EVENT_NAME") == "repository_dispatch" else str(p.get("modo") or "validar")
+          es_post = str(pieza["formato"]).strip().lower().startswith("post")
+          if es_post:
+              # Texto de la placa animada: el que venga en "titulo" o, si no, el primer párrafo del copy
+              # (es el mismo texto que lleva la placa estática).
+              titulo = str(p.get("titulo") or "").strip() or str(pieza["caption"]).strip().split("\n\n")[0].strip()
+              open("animado-variables.json", "w", encoding="utf-8").write(json.dumps({"titulo": titulo}, ensure_ascii=False))
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"id={ident}\nmodo={modo}\n")
+              out.write(f"id={ident}\nmodo={modo}\npost={'si' if es_post else 'no'}\n")
           print(f"{ident} · {pieza['formato']} · {len(pieza['media'])} archivo(s) · modo {modo}")
           PY
+
+      # ---------- Post estático: se publica animado ----------
+      # Renderiza animado/post.html con el texto de la placa y el mismo fondo de la JPG aprobada, lo sube
+      # a Cloudinary y lo pone primero en la lista de archivos. Si algo de esto falla, la pieza sale
+      # como siempre, con la imagen estática.
+      - uses: actions/setup-node@v4
+        if: steps.datos.outputs.post == 'si'
+        with:
+          node-version: '22'
+
+      - name: Animar el post
+        id: animar
+        if: steps.datos.outputs.post == 'si'
+        continue-on-error: true
+        run: |
+          set -e
+          pip install -q pillow
+          python - <<'PY'
+          import json, urllib.request, io
+          from PIL import Image
+          pieza = json.load(open("pieza.json", encoding="utf-8"))
+          variables = json.load(open("animado-variables.json", encoding="utf-8"))
+          # Fondo: el color de la esquina de la placa estática, llevado al neutro más cercano
+          fondo = "hueso"
+          try:
+              with urllib.request.urlopen(pieza["media"][0], timeout=60) as r:
+                  px = Image.open(io.BytesIO(r.read())).convert("RGB").getpixel((20, 20))
+              neutros = {"blanco": (255, 255, 255), "hueso": (244, 241, 236), "carbon": (27, 26, 25)}
+              fondo = min(neutros, key=lambda k: sum((a - b) ** 2 for a, b in zip(px, neutros[k])))
+          except Exception as e:
+              print("No se pudo leer el fondo de la placa, se usa hueso:", e)
+          variables["fondo"] = fondo
+          json.dump(variables, open("animado-variables.json", "w", encoding="utf-8"), ensure_ascii=False)
+          print(json.dumps(variables, ensure_ascii=False))
+          PY
+          cd animado
+          npx --yes hyperframes@0.8.173 browser ensure
+          npx --yes hyperframes@0.8.173 render . -c post.html --format mp4 \
+            --variables-file ../animado-variables.json -o "$RUNNER_TEMP/post.mp4" --quiet
+          cd ..
+          curl -sS --fail-with-body -o cloudinary.json \
+            -F "file=@$RUNNER_TEMP/post.mp4" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=animado-${{ steps.datos.outputs.id }}-post-${{ github.run_id }}" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/video/upload
+          python - <<'PY'
+          import json
+          url = json.load(open("cloudinary.json"))["secure_url"]
+          pieza = json.load(open("pieza.json", encoding="utf-8"))
+          pieza["media"] = [url] + [m for m in pieza["media"] if not m.endswith(".mp4")]
+          open("pieza.json", "w", encoding="utf-8").write(json.dumps(pieza, ensure_ascii=False))
+          print("Post animado:", url)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: steps.datos.outputs.post == 'si' && steps.animar.outcome == 'success'
+        with:
+          name: post-animado-${{ steps.datos.outputs.id }}
+          path: ${{ runner.temp }}/post.mp4
+          retention-days: 7
 
       - name: Validar
         if: steps.datos.outputs.modo != 'publicar'

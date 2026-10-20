@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es" data-composition-variables='[
+  {"id":"titulo","type":"string","label":"Texto de la placa (resaltado entre asteriscos; sin asteriscos se resalta la última oración)","default":"Te rechazaron el accidente hace meses. El reclamo no está cerrado."},
+  {"id":"fondo","type":"enum","label":"Fondo","default":"hueso","options":[{"value":"blanco","label":"Blanco"},{"value":"hueso","label":"Hueso"},{"value":"carbon","label":"Carbón"}]},
+  {"id":"cta","type":"string","label":"Cierre de contacto (vacío para omitirlo)","default":"Escribinos por WhatsApp · link en el perfil"},
+  {"id":"usuario","type":"string","label":"Usuario del pie","default":"@estudiocanaro"}
+]'>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1350" />
+<title>Post animado · Estudio Canaro</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+  /* Misma placa que el post estático (Bricolage Grotesque, neutros y amarillo), en movimiento. */
+  @font-face { font-family: "Bricolage"; src: url("assets/fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
+  :root { --amarillo:#F2C230; --carbon:#1B1A19; --hueso:#F4F1EC; --blanco:#FFFFFF; --texto:#1B1A19; --gris:#7C7873; --linea:#E2DED7; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1350px; overflow:hidden; background:var(--hueso); }
+  #root { position:relative; width:100%; height:100%; overflow:hidden; font-family:"Bricolage", Arial, sans-serif; color:var(--texto); }
+  #root .clip { position:absolute; inset:0; }
+  .fondo { position:absolute; inset:0; background:var(--hueso); }
+  .f-blanco .fondo { background:var(--blanco); }
+  .f-carbon .fondo { background:var(--carbon); }
+  #root.f-carbon { color:var(--hueso); --linea:#3A3835; }
+
+  .bloque { position:absolute; left:100px; width:880px; }
+  .titulo { font-size:92px; line-height:1.17; font-weight:760; letter-spacing:-.008em; }
+  .w { display:inline-block; margin-right:.24em; }
+  /* Cada palabra resaltada lleva su propio fondo amarillo, como en la placa estática */
+  .h { position:relative; display:inline-block; margin-right:.24em; }
+  .h .m { position:absolute; left:-.12em; right:-.12em; top:.04em; bottom:-.06em; background:var(--amarillo); z-index:0; transform-origin:0 50%; }
+  .h.ult .m { right:-.08em; }
+  .h span { position:relative; z-index:1; }
+  .f-carbon .h { color:var(--carbon); }
+
+  .cta { margin-top:56px; display:flex; align-items:center; gap:18px; font-size:34px; font-weight:700; }
+  .cta i { width:14px; height:14px; border-radius:50%; background:var(--amarillo); display:block; flex:none; }
+
+  .linea { position:absolute; left:90px; right:90px; top:1150px; height:2px; background:var(--linea); transform-origin:0 50%; }
+  .logo { position:absolute; left:92px; top:1212px; height:80px; width:auto; }
+  .logo-claro { display:none; }
+  .f-carbon .logo-oscuro { display:none; }
+  .f-carbon .logo-claro { display:block; }
+  .usuario { position:absolute; right:100px; top:1230px; font-size:34px; font-weight:400; color:var(--gris); }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="post" data-start="0" data-duration="8" data-width="1080" data-height="1350">
+  <section id="escena" class="clip" data-start="0" data-duration="8" data-track-index="0">
+    <div class="fondo"></div>
+    <div class="bloque" id="bloque">
+      <div class="titulo" id="titulo"></div>
+      <div class="cta" id="cta"><i></i><span id="cta-txt"></span></div>
+    </div>
+    <div class="linea" id="linea"></div>
+    <img class="logo logo-oscuro" src="assets/logo.png" alt="Canaro Legales">
+    <img class="logo logo-claro" src="assets/logo-blanco.png" alt="Canaro Legales">
+    <div class="usuario" id="usuario"></div>
+  </section>
+</div>
+<script>
+  const v = window.__hyperframes.getVariables();
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  // Sin asteriscos se resalta la última oración (igual que la placa estática: "gancho. *remate.*")
+  let texto = String(v.titulo || "").replace(/\s+/g, " ").trim();
+  if (!texto.includes("*")) {
+    const oraciones = texto.match(/[^.!?]+[.!?]+["»”]?\s*|[^.!?]+$/g) || [texto];
+    if (oraciones.length > 1) {
+      const ultima = oraciones.pop().trim();
+      texto = oraciones.join("").trim() + " *" + ultima + "*";
+    }
+  }
+  const palabras = (t, cls) => t.split(/\s+/).filter(Boolean);
+  let html = "";
+  texto.split(/(\*[^*]+\*)/).forEach((p) => {
+    if (/^\*.+\*$/.test(p)) {
+      const ws = palabras(p.slice(1, -1));
+      ws.forEach((w, i) => { html += '<span class="h' + (i === ws.length - 1 ? " ult" : "") + '"><i class="m"></i><span>' + esc(w) + "</span></span>"; });
+    } else {
+      palabras(p).forEach((w) => { html += '<span class="w">' + esc(w) + "</span>"; });
+    }
+  });
+  $("titulo").innerHTML = html;
+  $("root").classList.add("f-" + (v.fondo || "hueso"));
+  $("usuario").textContent = v.usuario || "";
+  const conCta = String(v.cta || "").trim() !== "";
+  if (conCta) $("cta-txt").textContent = v.cta; else $("cta").remove();
+
+  // Achica el texto si es largo y lo centra en el área libre sobre el pie
+  const tit = $("titulo");
+  for (let fs = 92; fs > 60 && tit.offsetHeight > 640; fs -= 4) tit.style.fontSize = fs + "px";
+  const alto = $("bloque").offsetHeight;
+  $("bloque").style.top = Math.max(120, Math.round((1150 - alto) / 2)) + "px";
+
+  const E = "power3.out";
+  const tl = gsap.timeline({ paused: true });
+  const todas = document.querySelectorAll("#titulo .w, #titulo .h");
+  const marcas = document.querySelectorAll("#titulo .h .m");
+  tl.fromTo("#linea", { scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: "power2.out" }, 0)
+    .fromTo(".logo, #usuario", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.1)
+    .fromTo(todas, { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: E }, 0.25);
+  let t = 0.25 + todas.length * 0.08 + 0.35;
+  if (marcas.length) {
+    tl.fromTo(marcas, { scaleX: 0 }, { scaleX: 1, duration: 0.28, stagger: 0.12, ease: "power2.out" }, t);
+    t += marcas.length * 0.12 + 0.4;
+  }
+  if (conCta) {
+    tl.fromTo("#cta", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.5, ease: E }, Math.max(t + 0.3, 3.6));
+    tl.fromTo("#cta i", { scale: 0.6 }, { scale: 1.25, duration: 0.35, yoyo: true, repeat: 3, ease: "sine.inOut" }, Math.max(t + 0.6, 3.9));
+  }
+  window.__timelines["post"] = tl;
+</script>
+</body>
+</html>

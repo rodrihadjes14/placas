@@ -1,6 +1,6 @@
 name: Render animado
 
-# Renderiza una plantilla de animado/ (carrusel o reel) con HyperFrames y sube el video a Cloudinary
+# Renderiza una plantilla de animado/ (carrusel, reel o post) con HyperFrames y sube el video a Cloudinary
 # como animado-<ID>-<plantilla>. También queda como artefacto descargable de la corrida.
 # A mano: Actions > Render animado > Run workflow. Desde Apps Script: repository_dispatch "render-animado"
 # con client_payload {id, plantilla, formato, variables}.
@@ -13,7 +13,7 @@ on:
         description: ID de la fila (por ejemplo T70) o "prueba"
         default: prueba
       plantilla:
-        description: carrusel o reel
+        description: carrusel, reel o post
         default: carrusel
       formato:
         description: mp4 (pieza final) o mov (capa transparente para componer)
@@ -51,11 +51,11 @@ jobs:
           const id = String(p.id || "prueba").trim();
           if (!/^(T\d{1,4}(-\d{1,2})?|prueba)$/i.test(id)) throw new Error("ID inválido: " + id);
           const plantilla = String(p.plantilla || "carrusel").trim().toLowerCase();
-          if (!["carrusel", "reel"].includes(plantilla)) throw new Error("Plantilla inválida: " + plantilla);
+          if (!["carrusel", "reel", "post"].includes(plantilla)) throw new Error("Plantilla inválida: " + plantilla);
           const formato = String(p.formato || "mp4").trim().toLowerCase() === "mov" ? "mov" : "mp4";
           let vars = p.variables || "";
           if (typeof vars === "string") vars = vars.trim() ? JSON.parse(vars) : null;
-          if (!vars) vars = JSON.parse(fs.readFileSync(plantilla === "reel" ? "ejemplos/reel-itinere.json" : "ejemplos/carrusel-dias.json", "utf8"));
+          if (!vars) vars = JSON.parse(fs.readFileSync({ reel: "ejemplos/reel-itinere.json", post: "ejemplos/post-rechazo.json" }[plantilla] || "ejemplos/carrusel-dias.json", "utf8"));
           fs.writeFileSync(process.env.RUNNER_TEMP + "/variables.json", JSON.stringify(vars));
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${id}\nplantilla=${plantilla}\nformato=${formato}\n`);
           console.log(`${id} · ${plantilla} · ${formato}`);

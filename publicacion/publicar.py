@@ -10,7 +10,9 @@ pieza.json:
     id        ID de la fila en Aprobación (por ejemplo T62)
     formato   "Post estatico", "Carrusel" o "Reel" (columna FORMATO)
     caption   texto de la publicación (COPY o GUION, más los HASHTAGS)
-    media     lista de direcciones: placas de IMAGENES (post y carrusel) o el VIDEO_URL (Reel)
+    media     lista de direcciones: placas de IMAGENES (post y carrusel) o el VIDEO_URL (Reel).
+              En un post, si la primera es un .mp4 (el post animado que arma publicar-pieza), se
+              publica como video: Reel en Instagram (también aparece en el feed) y video en Facebook.
     redes     "IG,FB" por defecto
 
 Variables de entorno: META_TOKEN (secreto META_PAGE_TOKEN), IG_USER_ID, FB_PAGE_ID, GRAPH_VERSION.
@@ -84,7 +86,13 @@ def esperar_contenedor(contenedor, minutos):
     raise RuntimeError("Instagram tardó demasiado en procesar el archivo")
 
 
+def es_video(url):
+    return urllib.parse.urlparse(url).path.lower().endswith((".mp4", ".mov"))
+
+
 def ig_post(media, caption):
+    if es_video(media[0]):
+        return ig_reel(media, caption)
     c = graph("POST", f"{IG}/media", image_url=media[0], caption=caption)["id"]
     esperar_contenedor(c, 3)
     return graph("POST", f"{IG}/media_publish", creation_id=c)["id"]
@@ -113,8 +121,18 @@ def ig_reel(media, caption):
 # ---------- Facebook ----------
 
 def fb_post(media, caption):
+    if es_video(media[0]):
+        return fb_video(media, caption)
     res = graph("POST", f"{PAGINA}/photos", token=token_pagina(), url=media[0], message=caption)
     return res.get("post_id") or res["id"]
+
+
+def fb_video(media, caption):
+    """Video común de la página (admite el formato vertical 4:5 de las placas, a diferencia del Reel)."""
+    url = f"https://graph-video.facebook.com/{VERSION}/{PAGINA}/videos"
+    datos = urllib.parse.urlencode({"access_token": token_pagina(), "file_url": media[0],
+                                    "description": caption, "published": "true"}).encode()
+    return pedir(url, datos, metodo="POST")["id"]
 
 
 def fb_carrusel(media, caption):
