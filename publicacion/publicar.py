@@ -191,6 +191,13 @@ def tipo(formato):
     raise RuntimeError(f"Formato no soportado: {formato!r}")
 
 
+def tipo_seguro(formato):
+    try:
+        return tipo(formato)
+    except RuntimeError:
+        return ""
+
+
 def validar(pieza):
     """Revisa sin publicar: token, cuentas y que los archivos estén accesibles."""
     print("Usuario del token:", graph("GET", "me", fields="id,name").get("name"))
@@ -240,6 +247,9 @@ def main():
     except Exception as e:
         errores.append(str(e))
     listo = not errores and all(estado.get(r.lower() + "_id") for r in redes)
+    # El video del post animado queda registrado para que el envío a TikTok use el mismo archivo
+    if pieza.get("media") and es_video(pieza["media"][0]) and tipo_seguro(pieza.get("formato")) == "post":
+        estado["video"] = pieza["media"][0]
     estado.update({
         "id": pieza.get("id"),
         "formato": pieza.get("formato"),
