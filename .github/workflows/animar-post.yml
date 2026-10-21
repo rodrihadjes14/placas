@@ -1,0 +1,76 @@
+name: Animar post
+
+# Lo dispara ExportadorCarruseles.gs apenas un post estático queda graficado, con
+# client_payload {id, imagen, titulo}: id de la fila, la placa JPG y su texto (primer párrafo del COPY).
+# Renderiza la versión animada, la sube a Cloudinary y deja publicaciones/<ID>/animado.json.
+# ExportadorCarruseles.gs lee ese archivo y escribe el link en la columna ANIMADO, para revisarlo
+# antes de que se publique. Al publicar, publicar-pieza usa este mismo video (no lo vuelve a armar).
+# A mano: Actions > Animar post > Run workflow.
+on:
+  repository_dispatch:
+    types: [animar-post]
+  workflow_dispatch:
+    inputs:
+      id:
+        description: ID de la fila (por ejemplo T74)
+        required: true
+      imagen:
+        description: Dirección de la placa JPG
+        required: true
+      titulo:
+        description: Texto de la placa (primer párrafo del COPY)
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: animar-post-${{ github.event.client_payload.id || github.event.inputs.id }}
+  cancel-in-progress: true
+
+jobs:
+  animar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar herramientas
+        run: |
+          pip install -q pillow
+          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; }
+
+      - name: Renderizar y subir
+        id: render
+        env:
+          PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || toJson(github.event.inputs) }}
+        run: |
+          python - <<'PY'
+          import json, os
+          p = json.loads(os.environ["PAYLOAD"])
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write("POST_ID=" + str(p.get("id", "")).strip().upper() + "\n")
+          json.dump(p, open(os.environ["RUNNER_TEMP"] + "/payload.json", "w"), ensure_ascii=False)
+          PY
+          python - <<'PY'
+          import json, os, subprocess, sys
+          p = json.load(open(os.environ["RUNNER_TEMP"] + "/payload.json"))
+          subprocess.run([sys.executable, "animado/animar_post.py", str(p.get("id", "")),
+                          str(p.get("imagen", "")), str(p.get("titulo", ""))], check=True)
+          PY
+
+      - name: Guardar el resultado
+        run: |
+          git config user.name "publicador-bot"
+          git config user.email "publicador-bot@users.noreply.github.com"
+          git add "publicaciones/$POST_ID/animado.json"
+          git commit -m "post animado $POST_ID" || true
+          for i in 1 2 3; do git pull --rebase -q origin main && git push -q origin HEAD:main && break; sleep 5; done

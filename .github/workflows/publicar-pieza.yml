@@ -84,9 +84,9 @@ jobs:
           PY
 
       # ---------- Post estático: se publica animado ----------
-      # Renderiza animado/post.html con el texto de la placa y el mismo fondo de la JPG aprobada, lo sube
-      # a Cloudinary y lo pone primero en la lista de archivos. Si algo de esto falla, la pieza sale
-      # como siempre, con la imagen estática.
+      # Usa el video que dejó animar-post al graficar (publicaciones/<ID>/animado.json), si es de la
+      # misma placa. Si no existe, lo arma ahora con animado/animar_post.py. Si algo de esto falla,
+      # la pieza sale como siempre, con la imagen estática.
       - uses: actions/setup-node@v4
         if: steps.datos.outputs.post == 'si'
         with:
@@ -98,51 +98,28 @@ jobs:
         continue-on-error: true
         run: |
           set -e
-          pip install -q pillow
           python - <<'PY'
-          import json, urllib.request, io
-          from PIL import Image
+          import json, os, pathlib, subprocess, sys
           pieza = json.load(open("pieza.json", encoding="utf-8"))
-          variables = json.load(open("animado-variables.json", encoding="utf-8"))
-          # Fondo: el color de la esquina de la placa estática, llevado al neutro más cercano
-          fondo = "hueso"
-          try:
-              with urllib.request.urlopen(pieza["media"][0], timeout=60) as r:
-                  px = Image.open(io.BytesIO(r.read())).convert("RGB").getpixel((20, 20))
-              neutros = {"blanco": (255, 255, 255), "hueso": (244, 241, 236), "carbon": (27, 26, 25)}
-              fondo = min(neutros, key=lambda k: sum((a - b) ** 2 for a, b in zip(px, neutros[k])))
-          except Exception as e:
-              print("No se pudo leer el fondo de la placa, se usa hueso:", e)
-          variables["fondo"] = fondo
-          json.dump(variables, open("animado-variables.json", "w", encoding="utf-8"), ensure_ascii=False)
-          print(json.dumps(variables, ensure_ascii=False))
-          PY
-          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; }
-          cd animado
-          npx --yes hyperframes@0.8.173 browser ensure
-          npx --yes hyperframes@0.8.173 render . -c post.html --format mp4 \
-            --variables-file ../animado-variables.json -o "$RUNNER_TEMP/post.mp4" --quiet
-          cd ..
-          curl -sS --fail-with-body -o cloudinary.json \
-            -F "file=@$RUNNER_TEMP/post.mp4" \
-            -F "upload_preset=make-audio" \
-            -F "public_id=animado-${{ steps.datos.outputs.id }}-post-${{ github.run_id }}" \
-            https://api.cloudinary.com/v1_1/dy2gpxfsz/video/upload
-          python - <<'PY'
-          import json
-          url = json.load(open("cloudinary.json"))["secure_url"]
-          pieza = json.load(open("pieza.json", encoding="utf-8"))
+          titulo = json.load(open("animado-variables.json", encoding="utf-8"))["titulo"]
+          previo = pathlib.Path("publicaciones") / pieza["id"] / "animado.json"
+          url = ""
+          if previo.exists():
+              datos = json.loads(previo.read_text(encoding="utf-8"))
+              if datos.get("video") and datos.get("imagen") == pieza["media"][0]:
+                  url = datos["video"]
+                  print("Se usa el video armado al graficar")
+          if not url:
+              subprocess.run("pip install -q pillow", shell=True, check=True)
+              subprocess.run("command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; }", shell=True, check=True)
+              res = subprocess.run([sys.executable, "animado/animar_post.py", pieza["id"], pieza["media"][0], titulo],
+                                   check=True, capture_output=True, text=True)
+              print(res.stderr)
+              url = res.stdout.strip().splitlines()[-1]
           pieza["media"] = [url] + [m for m in pieza["media"] if not m.endswith(".mp4")]
           open("pieza.json", "w", encoding="utf-8").write(json.dumps(pieza, ensure_ascii=False))
           print("Post animado:", url)
           PY
-
-      - uses: actions/upload-artifact@v4
-        if: steps.datos.outputs.post == 'si' && steps.animar.outcome == 'success'
-        with:
-          name: post-animado-${{ steps.datos.outputs.id }}
-          path: ${{ runner.temp }}/post.mp4
-          retention-days: 7
 
       - name: Validar
         if: steps.datos.outputs.modo != 'publicar'
