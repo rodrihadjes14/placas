@@ -5,9 +5,12 @@ el diseño (Bricolage Grotesque, neutros y amarillo) queda fijo en la plantilla.
 
 - `post.html`: post estático animado, 1080x1350, 8 s. Misma placa que la JPG (texto, resaltado amarillo,
   pie con logo) más un cierre de contacto por WhatsApp. Sin asteriscos resalta la última oración.
-  Lo usa `publicar-pieza` solo: toma el primer párrafo del copy y el fondo de la JPG aprobada,
-  lo renderiza, lo sube a Cloudinary y publica el video (Reel en Instagram, video en Facebook).
-  Si el render falla, el post sale con la imagen estática.
+  Se arma al graficar: ExportadorCarruseles.gs dispara el workflow `animar-post` (texto = primer
+  párrafo del COPY, fondo = el de la JPG), que lo sube a Cloudinary y deja
+  `publicaciones/<ID>/animado.json`; el exportador copia ese link a la columna ANIMADO para revisarlo.
+  Al publicar, `publicar-pieza` usa ese mismo video (si falta, lo arma en el momento con
+  `animar_post.py`) y lo publica como Reel en Instagram y video en Facebook; TikTok recibe el mismo.
+  Si todo falla, el post sale con la imagen estática.
 - `carrusel.html`: diapositiva animada 1080x1350, 7 s. Gráfico opcional: grilla de días.
   Hoy no se usa: los carruseles se publican con las placas estáticas.
 - `reel.html`: capa gráfica del Reel en pantalla dividida, 1080x1920 (paneles arriba, avatar abajo).
