@@ -29,6 +29,8 @@
   {"id":"cambio","type":"number","label":"Segundo en que entra el panel 2","default":6.6,"min":1,"max":120,"step":0.1},
   {"id":"cta_desde","type":"number","label":"Segundo en que entra el CTA","default":12.2,"min":3,"max":120,"step":0.1},
   {"id":"duracion","type":"number","label":"Duración total (s)","default":14.5,"min":4,"max":120,"step":0.1},
+  {"id":"inicio_dividido","type":"boolean","label":"Reel de caso: el panel 1 ya está en pantalla desde el primer segundo","default":false},
+  {"id":"afirmacion_desde","type":"number","label":"Segundo mínimo en que entra la afirmación (0 = después del gancho)","default":0,"min":0,"max":30,"step":0.1},
   {"id":"vista_previa","type":"boolean","label":"Vista previa con avatar de muestra y subtítulos","default":true},
   {"id":"subtitulos","type":"string","label":"Subtítulos de muestra (JSON)","default":"[{\"t\":\"¿Reclamar el accidente es ir contra tu empleador?\",\"s\":0.2,\"e\":2.2},{\"t\":\"El reclamo se hace contra la aseguradora,\",\"s\":2.5,\"e\":4.4},{\"t\":\"no contra tu empleador.\",\"s\":4.5,\"e\":6.2},{\"t\":\"No le reclamás a quien te da trabajo,\",\"s\":6.6,\"e\":8.8},{\"t\":\"del otro lado está la aseguradora.\",\"s\":9.0,\"e\":11.6},{\"t\":\"Escribinos por WhatsApp.\",\"s\":12.4,\"e\":14.0}]"}
 ]'>
@@ -56,7 +58,8 @@
   .marca img { height:58px; width:auto; }
   .etiqueta { font-size:24px; font-weight:700; letter-spacing:.14em; padding:10px 20px; border:3px solid var(--carbon); border-radius:999px; }
   .num { font-size:24px; font-weight:700; letter-spacing:.1em; color:var(--gris); }
-  .gancho { position:absolute; left:90px; top:330px; width:900px; font-size:80px; line-height:1.02; font-weight:800; letter-spacing:-.03em; }
+  /* Gancho en mayúscula: sin interletrado negativo (en mayúscula las letras se pegan) e interlineado 1,0 */
+  .gancho { position:absolute; left:90px; top:330px; width:900px; font-size:80px; line-height:1; font-weight:800; letter-spacing:0; text-transform:uppercase; }
   .w { display:inline-block; margin-right:.22em; }
   .afirmacion { position:absolute; left:90px; width:920px; font-size:68px; line-height:1.05; font-weight:800; letter-spacing:-.025em; }
   .hl { position:relative; display:inline-block; margin-right:.22em; }
@@ -265,12 +268,21 @@
   cambio = Math.min(Math.max(cambio, entrada + 2.5), desde - 2.5);
   const tl = gsap.timeline({ paused: true });
 
-  // Panel 1: baja desde arriba mientras el avatar pasa a la mitad inferior
-  tl.fromTo("#arriba", { yPercent: -100 }, { yPercent: 0, duration: 0.6, ease: "power3.inOut" }, entrada);
-  let t = entrada + 0.35;
+  // Panel 1: baja desde arriba mientras el avatar pasa a la mitad inferior.
+  // En los Reels de caso (inicio_dividido) ya está en pantalla desde el primer cuadro.
+  const dividido = v.inicio_dividido === true || v.inicio_dividido === "true";
+  let t;
+  if (dividido) {
+    tl.set("#arriba", { yPercent: 0 }, 0);
+    t = 0;
+  } else {
+    tl.fromTo("#arriba", { yPercent: -100 }, { yPercent: 0, duration: 0.6, ease: "power3.inOut" }, entrada);
+    t = entrada + 0.35;
+  }
   tl.fromTo("#marca1", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.4, ease: E }, t);
   tl.fromTo("#gancho .w", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: E }, t + 0.1);
   t += 0.1 + document.querySelectorAll("#gancho .w").length * 0.06 + 0.3;
+  t = Math.max(t, Number(v.afirmacion_desde) || 0);   // en los Reels de caso, la afirmación entra cuando se la dice
   tl.fromTo("#afirmacion .w, #afirmacion .hl", { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: E }, t);
   tl.fromTo("#afirmacion .m", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power2.out" }, t + 0.5);
   tl.fromTo("#fuente", { opacity: 0 }, { opacity: 1, duration: 0.4 }, t + 0.9);
@@ -334,7 +346,8 @@
 
   // Vista previa: avatar de muestra (pantalla completa → mitad inferior) y subtítulos karaoke
   if (v.vista_previa) {
-    tl.fromTo("#figura", { y: 0, scale: 1 }, { y: 560, scale: 0.92, duration: 0.6, ease: "power3.inOut" }, entrada);
+    if (dividido) tl.set("#figura", { y: 560, scale: 0.92 }, 0);
+    else tl.fromTo("#figura", { y: 0, scale: 1 }, { y: 560, scale: 0.92, duration: 0.6, ease: "power3.inOut" }, entrada);
     let bloques = [];
     try { bloques = JSON.parse(v.subtitulos || "[]"); } catch (e) { bloques = []; }
     bloques.forEach((b, i) => {

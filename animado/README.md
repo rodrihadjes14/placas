@@ -36,5 +36,8 @@ Si el payload de `componer-video` trae la clave `animado` (ver `ejemplos/payload
 `video/componer.py` arma el Reel así: el avatar arranca a pantalla completa mientras dice el gancho,
 al terminar la primera oración baja a la mitad inferior y arriba entra el panel 1; el panel 2 entra con la
 primera oración que empieza al menos 2,5 s después (normalmente la tercera) y el CTA cuando empieza la
-última oración. Esos tiempos salen solos de `tiempos`. En este modo no se
+última oración. Esos tiempos salen solos de `tiempos`.
+En los Reels de caso real (`animado.caso: true` o etiqueta `CASO REAL`) el panel 1 ya está en pantalla
+desde el primer cuadro, con el avatar en la mitad inferior, y la afirmación entra cuando termina el gancho.
+El gancho de todos los Reels va en mayúscula (interletrado 0, interlineado 1,0). En este modo no se
 usan las placas de PLACAS_VIDEO ni la placa de contacto. Sin `animado`, todo funciona como antes.

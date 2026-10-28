@@ -358,6 +358,19 @@ def fin_del_gancho(palabras):
     return 2.5
 
 
+def _normalizar(texto):
+    t = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode()
+    return re.sub(r"\s+", " ", t).strip().lower()
+
+
+def es_caso(animado):
+    """Reel de caso real: animado trae "caso": true o la etiqueta del panel es CASO REAL."""
+    caso = animado.get("caso")
+    if isinstance(caso, str):
+        caso = caso.strip().lower() in ("true", "si", "sí", "1")
+    return bool(caso) or _normalizar(animado.get("etiqueta")) == "caso real"
+
+
 def inicios_de_oracion(palabras):
     """Segundos en que empieza cada oración dicha (la primera palabra y cada una que sigue a un punto)."""
     res = []
@@ -385,18 +398,25 @@ def componer_dividido(datos, entrada, palabras, total):
     cara = detectar_cara(entrada)
     print("Cara detectada:", cara if cara else "no (se usan posiciones por defecto)")
 
-    t_entrada = float(animado.get("entrada") or fin_del_gancho(palabras))
+    # Reels de caso (28/10): el panel 1 ya está en pantalla cuando empieza el gancho y el avatar
+    # arranca en la mitad inferior. En los demás, el avatar dice el gancho a pantalla completa.
+    caso = es_caso(animado)
+    t_gancho = fin_del_gancho(palabras)
+    t_entrada = 0.0 if caso else float(animado.get("entrada") or t_gancho)
+    ref = max(t_entrada, t_gancho)   # fin del gancho: de ahí se cuentan el panel 2 y el CTA
     t_cta = inicio_ultima_oracion(palabras) if palabras else None
-    if t_cta is None or t_cta < t_entrada + 5:
-        t_cta = max(t_entrada + 5, total - 3.5)
-    # Panel 2: entra con la primera oración que empieza al menos 2,5 s después del panel 1
+    if t_cta is None or t_cta < ref + 5:
+        t_cta = max(ref + 5, total - 3.5)
+    # Panel 2: entra con la primera oración que empieza al menos 2,5 s después del fin del gancho
     # (normalmente la tercera: en el molde T36 la segunda es la afirmación). Si no hay, a mitad de camino.
-    oraciones = [t for t in inicios_de_oracion(palabras) if t > t_entrada + 2.5 and t < t_cta - 2.5]
-    t_cambio = float(animado.get("cambio") or (oraciones[0] if oraciones else (t_entrada + t_cta) / 2))
+    oraciones = [t for t in inicios_de_oracion(palabras) if t > ref + 2.5 and t < t_cta - 2.5]
+    t_cambio = float(animado.get("cambio") or (oraciones[0] if oraciones else (ref + t_cta) / 2))
     if isinstance(animado.get("pasos"), list):
         animado = dict(animado, pasos="|".join(str(x) for x in animado["pasos"]))
     variables = dict(animado, entrada=round(t_entrada, 2), cambio=round(t_cambio, 2), cta_desde=round(t_cta, 2),
-                     duracion=round(total, 2), vista_previa=False)
+                     duracion=round(total, 2), vista_previa=False, inicio_dividido=caso,
+                     afirmacion_desde=round(t_gancho, 2) if caso else 0)
+    variables.pop("caso", None)
     capa = renderizar_panel(variables, TRABAJO / "panel.mov")
 
     cabeza = cara["cabeza"] if cara else 420
@@ -406,11 +426,15 @@ def componer_dividido(datos, entrada, palabras, total):
     else:
         sub_y = 1440
     e, d = t_entrada, TRANSICION
-    y_expr = f"if(lt(t,{e + d:.3f}),{y0}+({MITAD - y0})*(1-pow(1-(t-{e:.3f})/{d},3)),{MITAD})"
+    if caso:
+        y_expr, activo = str(MITAD), "1"   # el avatar ya está en la mitad inferior desde el primer cuadro
+    else:
+        y_expr = f"if(lt(t,{e + d:.3f}),{y0}+({MITAD - y0})*(1-pow(1-(t-{e:.3f})/{d},3)),{MITAD})"
+        activo = f"gte(t,{e:.3f})"
     filtros = [
         "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,split[completo][fuente]",
         f"[fuente]crop=1080:{MITAD}:0:{y0}[ventana]",
-        f"[completo][ventana]overlay=x=0:y='{y_expr}':enable='gte(t,{e:.3f})'[base]",
+        f"[completo][ventana]overlay=x=0:y='{y_expr}':enable='{activo}'[base]",
         "[1:v]format=yuva444p10le[panel]",
         "[base][panel]overlay=0:0:eof_action=repeat[v1]",
     ]
@@ -422,7 +446,7 @@ def componer_dividido(datos, entrada, palabras, total):
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
     salida = TRABAJO / "final.mp4"
-    print(f"Componiendo en pantalla dividida: panel 1 desde {e:.2f} s, panel 2 desde {t_cambio:.2f} s, CTA desde {t_cta:.2f} s, ventana del avatar desde y={y0}")
+    print(f"Componiendo en pantalla dividida{' (Reel de caso)' if caso else ''}: panel 1 desde {e:.2f} s, panel 2 desde {t_cambio:.2f} s, CTA desde {t_cta:.2f} s, ventana del avatar desde y={y0}")
     subprocess.run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada), "-i", str(capa),
         "-filter_complex", ";".join(filtros), "-map", f"[{ultimo}]", "-map", "0:a?",
