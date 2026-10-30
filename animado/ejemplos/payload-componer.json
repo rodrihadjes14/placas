@@ -15,8 +15,9 @@
     "no": "Tu empleador",
     "nota2": "",
     "cta_titulo": "¿Tenés esta duda?",
-    "cta_resaltado": "Escribinos.",
+    "cta_resaltado": "Dejanos tu mensaje.",
     "cta_detalle": "El mismo abogado que te atiende es el que lleva tu caso.",
-    "cta_boton": "WhatsApp · link en el perfil"
+    "cta_boton": "Por mensaje privado",
+    "cta_icono": "mensaje"
   }
 }

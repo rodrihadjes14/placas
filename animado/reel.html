@@ -22,9 +22,10 @@
   {"id":"evento","type":"string","label":"Trayecto: evento","default":"Accidente"},
   {"id":"nota2","type":"string","label":"Panel 2, nota al pie","default":"Tu puesto de trabajo no está en juego."},
   {"id":"cta_titulo","type":"string","label":"CTA, primera línea","default":"¿Tenés esta duda?"},
-  {"id":"cta_resaltado","type":"string","label":"CTA, segunda línea","default":"Escribinos."},
+  {"id":"cta_resaltado","type":"string","label":"CTA, segunda línea","default":"Dejanos tu mensaje."},
   {"id":"cta_detalle","type":"string","label":"CTA, detalle","default":"El mismo abogado que te atiende es el que lleva tu caso."},
-  {"id":"cta_boton","type":"string","label":"CTA, botón","default":"WhatsApp · link en el perfil"},
+  {"id":"cta_boton","type":"string","label":"CTA, botón","default":"Por mensaje privado"},
+  {"id":"cta_icono","type":"enum","label":"CTA, ícono del botón","default":"mensaje","options":[{"value":"mensaje","label":"Mensaje privado"},{"value":"comentario","label":"Comentarios"},{"value":"compartir","label":"Compartir"}]},
   {"id":"entrada","type":"number","label":"Segundo en que entra el panel 1 (fin del gancho)","default":2.4,"min":0,"max":10,"step":0.1},
   {"id":"cambio","type":"number","label":"Segundo en que entra el panel 2","default":6.6,"min":1,"max":120,"step":0.1},
   {"id":"cta_desde","type":"number","label":"Segundo en que entra el CTA","default":12.2,"min":3,"max":120,"step":0.1},
@@ -159,7 +160,7 @@
     <div class="cta" id="cta">
       <h3 id="ctaT"></h3>
       <p id="ctaD"></p>
-      <div class="boton" id="ctaB"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z"/></svg><span id="ctaBt"></span></div>
+      <div class="boton" id="ctaB"><span id="ctaI"></span><span id="ctaBt"></span></div>
     </div>
   </div>
   <div class="subs" id="subs"></div>
@@ -192,6 +193,13 @@
   $("ctaT").innerHTML = esc(v.cta_titulo) + "<em>" + esc(v.cta_resaltado) + "</em>";
   $("ctaD").textContent = v.cta_detalle || "";
   $("ctaBt").textContent = v.cta_boton || "";
+  const ICONO_CTA = {
+    mensaje: '<svg viewBox="0 0 24 24"><path d="M22 3L10 14"/><path d="M22 3l-7 19-4-8-8-4z"/></svg>',
+    comentario: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z"/></svg>',
+    compartir: '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>'
+  };
+  $("ctaI").outerHTML = ICONO_CTA[v.cta_icono] || ICONO_CTA.mensaje;
+  if (!v.cta_boton) $("ctaB").style.display = "none";
 
   // ---------- Gráfico del panel 2 ----------
   const tipos = ["contra", "pasos", "dato", "dias", "trayecto"];
@@ -340,7 +348,7 @@
   }
   tl.fromTo("#nota2", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4 }, Math.min(t, desde - 0.6));
 
-  // Cierre: CTA de WhatsApp
+  // Cierre: llamada a la acción (mensaje privado, comentarios o compartir)
   tl.fromTo("#cta", { yPercent: 100 }, { yPercent: 0, duration: 0.7, ease: "power3.inOut" }, desde);
   tl.fromTo("#ctaT, #ctaD, #ctaB", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.12, ease: E }, desde + 0.4);
 

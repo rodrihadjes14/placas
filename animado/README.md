@@ -4,7 +4,7 @@ Plantillas HTML + GSAP que HyperFrames convierte en video. La tarea diaria solo 
 el diseño (Bricolage Grotesque, neutros y amarillo) queda fijo en la plantilla.
 
 - `post.html`: post estático animado, 1080x1350, 8 s. Misma placa que la JPG (texto, resaltado amarillo,
-  pie con logo) más un cierre de contacto por WhatsApp. Sin asteriscos resalta la última oración.
+  pie con logo) más un cierre que invita a comentar o a mandar un mensaje privado. Sin asteriscos resalta la última oración.
   Se arma al graficar: ExportadorCarruseles.gs dispara el workflow `animar-post` (texto = primer
   párrafo del COPY, fondo = el de la JPG), que lo sube a Cloudinary y deja
   `publicaciones/<ID>/animado.json`; el exportador copia ese link a la columna ANIMADO para revisarlo.
@@ -15,7 +15,7 @@ el diseño (Bricolage Grotesque, neutros y amarillo) queda fijo en la plantilla.
   Hoy no se usa: los carruseles se publican con las placas estáticas.
 - `reel.html`: capa gráfica del Reel en pantalla dividida, 1080x1920 (paneles arriba, avatar abajo).
   Tres paneles: 1) gancho + afirmación; 2) un gráfico que explica la misma afirmación (`grafico`:
-  contra, pasos, dato, dias o trayecto); 3) cierre con WhatsApp.
+  contra, pasos, dato, dias o trayecto); 3) cierre con la llamada a la acción de la pieza (mensaje privado, comentarios o compartir; `cta_icono`: mensaje, comentario o compartir).
   Con `vista_previa: true` muestra un avatar de muestra y subtítulos; con `false` la mitad inferior
   queda transparente y se exporta en MOV con alfa para superponerla al video de HeyGen.
 
