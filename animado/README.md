@@ -13,7 +13,11 @@ el diseño (Bricolage Grotesque, neutros y amarillo) queda fijo en la plantilla.
   Si todo falla, el post sale con la imagen estática.
 - `carrusel.html`: diapositiva animada 1080x1350, 7 s. Gráfico opcional: grilla de días.
   Hoy no se usa: los carruseles se publican con las placas estáticas.
-- `reel.html`: capa gráfica del Reel en pantalla dividida, 1080x1920 (paneles arriba, avatar abajo).
+- `texto.html`: capa de texto animado del Reel (desde el 30/10/2026). El avatar queda a pantalla completa
+  y arriba de la cabeza aparecen bloques de dos líneas: una chica en minúscula (fondo blanco, letras negras)
+  y una grande en mayúscula sobre banda amarilla, en el gancho, en las frases clave y en el CTA.
+  `componer.py` calcula los tiempos y la altura según la cara; se exporta en MOV con alfa.
+- `reel.html`: (en desuso desde el 30/10/2026) capa gráfica del Reel en pantalla dividida, 1080x1920 (paneles arriba, avatar abajo).
   Tres paneles: 1) gancho + afirmación; 2) un gráfico que explica la misma afirmación (`grafico`:
   contra, pasos, dato, dias o trayecto); 3) cierre con la llamada a la acción de la pieza (mensaje privado, comentarios o compartir; `cta_icono`: mensaje, comentario o compartir).
   Con `vista_previa: true` muestra un avatar de muestra y subtítulos; con `false` la mitad inferior
@@ -30,14 +34,20 @@ Render local:
 
 En GitHub: Actions > "Render animado" > Run workflow (o repository_dispatch `render-animado`).
 
-## Reel en pantalla dividida (componer-video)
+## Reel con texto animado (componer-video)
 
-Si el payload de `componer-video` trae la clave `animado` (ver `ejemplos/payload-componer.json`),
-`video/componer.py` arma el Reel así: el avatar arranca a pantalla completa mientras dice el gancho,
-al terminar la primera oración baja a la mitad inferior y arriba entra el panel 1; el panel 2 entra con la
-primera oración que empieza al menos 2,5 s después (normalmente la tercera) y el CTA cuando empieza la
-última oración. Esos tiempos salen solos de `tiempos`.
-En los Reels de caso real (`animado.caso: true` o etiqueta `CASO REAL`) el panel 1 ya está en pantalla
-desde el primer cuadro, con el avatar en la mitad inferior, y la afirmación entra cuando termina el gancho.
-El gancho de todos los Reels va en mayúscula (interletrado 0, interlineado 1,0). En este modo no se
-usan las placas de PLACAS_VIDEO ni la placa de contacto. Sin `animado`, todo funciona como antes.
+Si el payload de `componer-video` trae la clave `animado`, `video/componer.py` deja el avatar a pantalla
+completa (con el acercamiento alternado en los cortes de escena, como siempre) y le superpone `texto.html`:
+
+    {"gancho": {"chica": "alta médica", "grande": "¿Te dieron el alta y todavía te duele?"},
+     "claves": [{"chica": "puede ser", "grande": "un alta prematura", "ancla": "Un alta al mes"}],
+     "cta": {"chica": "¿te pasó?", "grande": "Dejanos tu mensaje por privado"}}
+
+El gancho se ve mientras se lo dice; cada frase clave entra con su `ancla` (primeras palabras de una oración
+del guion) o, si no la encuentra, con la oración siguiente, y dura hasta 4,5 s; el CTA entra con la última
+oración y queda hasta el final. Los bloques van entre el encabezado de Reels y la cabeza del avatar, y los
+subtítulos karaoke a la altura del pecho. Ya no hay pantalla dividida.
+
+Prueba local de la capa sola:
+
+    npx --yes hyperframes@0.8.173 render . -c texto.html -o texto.mp4

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es" data-composition-variables='[
+  {"id":"bloques","type":"string","label":"Bloques de texto (JSON: chica, grande, desde, hasta)","default":"[{\"chica\":\"accidente in itinere\",\"grande\":\"¿Te accidentaste yendo al trabajo?\",\"desde\":0,\"hasta\":2.6},{\"chica\":\"lo que tenés que saber\",\"grande\":\"También lo cubre la ART\",\"desde\":3.0,\"hasta\":7.0},{\"chica\":\"no importa el medio\",\"grande\":\"Caminando, en moto o en colectivo\",\"desde\":7.6,\"hasta\":11.4},{\"chica\":\"¿te pasó?\",\"grande\":\"Dejanos tu mensaje por privado\",\"desde\":12.2,\"hasta\":14.4}]"},
+  {"id":"abajo","type":"number","label":"Borde inferior de la zona de texto (px, arriba de la cabeza)","default":640,"min":300,"max":1100},
+  {"id":"duracion","type":"number","label":"Duración total (s)","default":14.5,"min":2,"max":120,"step":0.1},
+  {"id":"vista_previa","type":"boolean","label":"Vista previa con avatar de muestra","default":true}
+]'>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<title>Texto animado del Reel · Estudio Canaro</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+  /* Capa de texto del Reel con el avatar a pantalla completa (desde el 30/10/2026).
+     Cada bloque: línea chica en minúscula (fondo blanco, letras negras) y línea grande en mayúscula
+     sobre banda amarilla. Van arriba de la cabeza del avatar, entre el encabezado de Reels (≈210 px)
+     y "abajo". Con vista_previa=false el fondo queda transparente y se exporta en MOV con alfa. */
+  @font-face { font-family: "Bricolage"; src: url("assets/fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
+  :root { --amarillo:#F2C230; --carbon:#1B1A19; --blanco:#FFFFFF; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1920px; overflow:hidden; background:transparent; }
+  #root { position:relative; width:100%; height:100%; overflow:hidden; font-family:"Bricolage", Arial, sans-serif; color:var(--carbon); }
+
+  .bloque { position:absolute; left:70px; right:70px; display:flex; flex-direction:column; align-items:center; text-align:center; opacity:0; }
+  .chica { display:inline-block; background:var(--blanco); color:var(--carbon); font-size:40px; line-height:1; font-weight:700;
+           letter-spacing:-.01em; text-transform:lowercase; padding:12px 22px 14px; border-radius:6px; margin-bottom:14px;
+           box-shadow:0 6px 20px rgba(0,0,0,.18); }
+  .grande { font-size:86px; line-height:1.12; font-weight:800; letter-spacing:0; text-transform:uppercase; }
+  .renglon { display:block; }
+  .banda { position:relative; display:inline-block; padding:4px 20px 8px; margin:3px 0; }
+  .banda .fondo { position:absolute; inset:0; background:var(--amarillo); border-radius:6px; transform-origin:0 50%; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+  .banda .w { position:relative; display:inline-block; }
+  .banda .w + .w { margin-left:.24em; }
+
+  /* Solo en vista previa: avatar de muestra a pantalla completa */
+  .muestra { position:absolute; inset:0; background:linear-gradient(#3A3936,#24231F); }
+  .muestra .cabeza { position:absolute; left:440px; top:700px; width:200px; height:250px; border-radius:50%; background:#55534E; }
+  .muestra .cuerpo { position:absolute; left:290px; top:960px; width:500px; height:960px; border-radius:240px 240px 0 0; background:#55534E; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="texto" data-start="0" data-width="1080" data-height="1920">
+  <div class="muestra" id="muestra"><div class="cabeza"></div><div class="cuerpo"></div></div>
+  <div id="capa"></div>
+</div>
+<script>
+  const v = window.__hyperframes.getVariables();
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const ARRIBA = 210;                                   // debajo del encabezado de Reels
+  const abajo = Math.max(ARRIBA + 220, Number(v.abajo) || 640);
+  const ANCHO = 940;
+
+  let bloques = [];
+  try { bloques = typeof v.bloques === "string" ? JSON.parse(v.bloques || "[]") : (v.bloques || []); } catch (e) { bloques = []; }
+  bloques = bloques.filter((b) => b && String(b.grande || "").trim());
+
+  // Parte la línea grande en renglones que entren en el ancho; cada renglón lleva su banda.
+  const medidor = document.createElement("div");
+  medidor.className = "grande";
+  medidor.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;";
+  document.body.appendChild(medidor);
+  function renglones(texto, tam) {
+    medidor.style.fontSize = tam + "px";
+    const palabras = String(texto).trim().split(/\s+/);
+    const res = [];
+    let actual = [];
+    for (const p of palabras) {
+      medidor.textContent = actual.concat(p).join(" ");
+      if (actual.length && medidor.offsetWidth + 40 > ANCHO) { res.push(actual); actual = [p]; }
+      else actual.push(p);
+    }
+    if (actual.length) res.push(actual);
+    return res;
+  }
+
+  const capa = document.getElementById("capa");
+  const tl = gsap.timeline({ paused: true });
+  const E = "power3.out";
+
+  bloques.forEach((b, i) => {
+    const el = document.createElement("div");
+    el.className = "bloque";
+    capa.appendChild(el);
+    // Achica la letra hasta que el bloque entre entre el encabezado y la cabeza (o hasta el 60 %)
+    let esc1 = 1, alto = 0;
+    for (; esc1 >= 0.6; esc1 -= 0.05) {
+      const tam = Math.round(86 * esc1);
+      const filas = renglones(b.grande, tam);
+      el.innerHTML = (b.chica ? '<div class="chica" style="font-size:' + Math.round(40 * Math.max(esc1, 0.8)) + 'px">' + esc(b.chica) + '</div>' : "") +
+        '<div class="grande" style="font-size:' + tam + 'px">' + filas.map((f) =>
+          '<span class="renglon"><span class="banda"><i class="fondo"></i>' + f.map((w) => '<span class="w">' + esc(w) + '</span>').join("") + '</span></span>').join("") + '</div>';
+      alto = el.offsetHeight;
+      if (alto <= abajo - ARRIBA) break;
+    }
+    el.style.top = Math.max(ARRIBA, abajo - alto) + "px";
+
+    const desde = Math.max(0, Number(b.desde) || 0);
+    const hasta = Math.max(desde + 1.2, Number(b.hasta) || desde + 3);
+    const chica = el.querySelector(".chica");
+    const fondos = el.querySelectorAll(".banda .fondo");
+    const palabras = el.querySelectorAll(".banda .w");
+    tl.set(el, { opacity: 1 }, desde);
+    if (chica) tl.fromTo(chica, { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: "back.out(2)" }, desde);
+    tl.fromTo(fondos, { scaleX: 0 }, { scaleX: 1, duration: 0.35, stagger: 0.08, ease: "power2.out" }, desde + 0.12);
+    tl.fromTo(palabras, { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.32, stagger: 0.05, ease: E }, desde + 0.22);
+    // Salida: sube apenas y se desvanece (el último bloque se queda hasta el final)
+    if (i < bloques.length - 1 || hasta < (Number(v.duracion) || 0) - 0.2) {
+      tl.to(el, { opacity: 0, y: -26, duration: 0.25, ease: "power2.in" }, hasta - 0.25);
+    }
+  });
+  medidor.remove();
+
+  if (!v.vista_previa) document.getElementById("muestra").remove();
+
+  const ultimo = bloques.reduce((m, b) => Math.max(m, Number(b.hasta) || 0), 0);
+  tl.set({}, {}, Math.max(Number(v.duracion) || 14.5, ultimo, 1));
+  window.__timelines["texto"] = tl;
+</script>
+</body>
+</html>

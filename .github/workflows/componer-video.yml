@@ -2,7 +2,7 @@ name: Componer video
 
 # Lo dispara VideosHeyGen.gs cuando HeyGen termina un video.
 # Superpone placas y subtítulos, y sube el resultado a Cloudinary como final-<ID>-<VIDEO_ID>.
-# Si el payload trae "animado", arma el Reel en pantalla dividida con el panel de HyperFrames.
+# Si el payload trae "animado", superpone al avatar el texto animado de HyperFrames (animado/texto.html).
 on:
   repository_dispatch:
     types: [componer-video]

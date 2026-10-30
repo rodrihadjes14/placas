@@ -11,11 +11,14 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
                de la pestaña Avatares y sirve para forzar la ubicación de las placas en un look.
     contacto   opcional, true por defecto: agrega la placa "Escribinos por WhatsApp / Link en nuestro
                perfil" durante la última oración del video (la llamada a la acción).
-    animado    opcional: textos del panel animado (variables de animado/reel.html: etiqueta, gancho,
-               grafico, origen, destino, evento, afirmacion, fuente, cta_*). Si viene, el video se arma
-               en pantalla dividida: el avatar arranca a pantalla completa durante el gancho, después
-               baja a la mitad inferior y arriba entra el panel de HyperFrames; el CTA entra en el
-               panel durante la última oración. En ese modo no se usan las placas ni la placa de contacto.
+    animado    opcional: textos animados del Reel (columna ANIMADO). Si viene, el avatar queda a
+               pantalla completa y arriba de la cabeza aparecen bloques de texto animado (animado/texto.html):
+               {"gancho": {"chica", "grande"}, "claves": [{"chica", "grande", "ancla"}, ...],
+                "cta": {"chica", "grande"}}. El gancho se ve mientras se lo dice, cada frase clave entra
+               con su ancla (primeras palabras de la oración del guion) o con la oración siguiente, y el
+               CTA desde la última oración hasta el final. Los subtítulos karaoke quedan a la altura del
+               pecho todo el video. En ese modo no se usan las placas ni la placa de contacto.
+               (Hasta el 30/10/2026 este modo armaba la pantalla dividida con animado/reel.html.)
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
                el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
@@ -342,33 +345,21 @@ def ventanas_placas(placas, palabras, total):
     return res
 
 
-# Pantalla dividida (HyperFrames)
+# Texto animado sobre el avatar a pantalla completa (HyperFrames). Desde el 30/10/2026 reemplaza
+# a la pantalla dividida: no hay paneles, solo bloques de texto arriba de la cabeza.
 ANIMADO = AQUI.parent / "animado"
 HYPERFRAMES = "hyperframes@0.8.173"
-MITAD = 960                  # alto del panel y de la ventana del avatar
-TRANSICION = 0.6             # segundos que tarda el avatar en bajar a la mitad inferior
-AIRE_CABEZA = 110            # aire entre el borde de la ventana y la cabeza
+MARGEN_TEXTO = 30            # aire entre el bloque de texto y la cabeza
+ABAJO_DEFECTO = 640          # borde inferior de la zona de texto si no se detecta la cara
+DURACION_CLAVE = 4.5         # segundos máximos de cada bloque de frase clave
 
 
 def fin_del_gancho(palabras):
-    """Segundo en que termina la primera oración (el gancho): ahí entra el panel."""
+    """Segundo en que termina la primera oración (el gancho)."""
     for p in palabras:
         if re.search(r"[.!?…]$", str(p["w"])):
-            return min(max(float(p["e"]) + 0.1, 1.2), 6.0)
+            return min(max(float(p["e"]) + 0.15, 1.2), 7.0)
     return 2.5
-
-
-def _normalizar(texto):
-    t = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode()
-    return re.sub(r"\s+", " ", t).strip().lower()
-
-
-def es_caso(animado):
-    """Reel de caso real: animado trae "caso": true o la etiqueta del panel es CASO REAL."""
-    caso = animado.get("caso")
-    if isinstance(caso, str):
-        caso = caso.strip().lower() in ("true", "si", "sí", "1")
-    return bool(caso) or _normalizar(animado.get("etiqueta")) == "caso real"
 
 
 def inicios_de_oracion(palabras):
@@ -380,63 +371,92 @@ def inicios_de_oracion(palabras):
     return res
 
 
-def renderizar_panel(variables, destino):
-    archivo = TRABAJO / "variables-panel.json"
+def _sin_asteriscos(t):
+    return re.sub(r"\*", "", str(t or "")).strip()
+
+
+def textos_de_bloques(animado):
+    """Devuelve (gancho, claves, cta) como dicts {chica, grande[, ancla]}. Acepta el formato nuevo
+    (gancho / claves / cta) y, por compatibilidad, el viejo de la pantalla dividida."""
+    def bloque(x):
+        if isinstance(x, dict) and str(x.get("grande", "")).strip():
+            return {"chica": str(x.get("chica", "")).strip(), "grande": str(x["grande"]).strip(),
+                    "ancla": str(x.get("ancla", "")).strip()}
+        return None
+    gancho = bloque(animado.get("gancho"))
+    claves = [b for b in (bloque(x) for x in (animado.get("claves") or [])) if b]
+    cta = bloque(animado.get("cta"))
+    if gancho is None and isinstance(animado.get("gancho"), str):          # formato viejo
+        gancho = {"chica": str(animado.get("etiqueta", "")).lower(), "grande": animado["gancho"], "ancla": ""}
+        if animado.get("afirmacion"):
+            claves = [{"chica": "lo que tenés que saber", "grande": _sin_asteriscos(animado["afirmacion"]), "ancla": ""}]
+        if animado.get("cta_resaltado"):
+            cta = {"chica": str(animado.get("cta_titulo", "")), "grande": str(animado["cta_resaltado"]), "ancla": ""}
+    return gancho, claves[:3], cta
+
+
+def tiempos_de_bloques(gancho, claves, cta, palabras, total):
+    """Asigna desde/hasta a cada bloque: el gancho mientras se lo dice, cada frase clave con una oración
+    del desarrollo (o con su ancla, si la trae) y el CTA desde la última oración hasta el final."""
+    res = []
+    t_gancho = fin_del_gancho(palabras) if palabras else 2.5
+    t_cta = inicio_ultima_oracion(palabras) if palabras else None
+    if t_cta is None or t_cta < t_gancho + 3:
+        t_cta = max(t_gancho + 3, total - 3.5)
+    if gancho:
+        res.append(dict(gancho, desde=0.0, hasta=round(t_gancho, 2)))
+    oraciones = [t for t in inicios_de_oracion(palabras) if t_gancho - 0.2 < t < t_cta - 1.5]
+    previo = t_gancho
+    for i, c in enumerate(claves):
+        t = ubicar_ancla(c["ancla"], palabras) if c.get("ancla") else None
+        minimo = previo - 0.2 if i == 0 else previo + 3.0   # la primera puede arrancar apenas termina el gancho
+        if t is None or t < minimo:
+            # siguiente oración disponible; si hay pocas, reparte el desarrollo en partes iguales
+            libres = [o for o in oraciones if o >= minimo]
+            t = libres[0] if libres else previo + (t_cta - previo) / (len(claves) - i + 1)
+        if t > t_cta - 1.5:
+            print(f"Aviso: no hay lugar para la frase clave {i + 1}; no se muestra")
+            continue
+        res.append(dict(c, desde=round(t, 2), hasta=None))
+        previo = t
+    for i, b in enumerate(res):
+        if b["hasta"] is None:
+            sig = res[i + 1]["desde"] if i + 1 < len(res) else t_cta
+            b["hasta"] = round(min(b["desde"] + DURACION_CLAVE, sig - 0.2), 2)
+    if cta:
+        res.append(dict(cta, desde=round(t_cta, 2), hasta=round(total, 2)))
+    return [{k: b[k] for k in ("chica", "grande", "desde", "hasta")} for b in res if b["hasta"] - b["desde"] >= 1.0]
+
+
+def renderizar_texto(variables, destino):
+    archivo = TRABAJO / "variables-texto.json"
     archivo.write_text(json.dumps(variables, ensure_ascii=False), encoding="utf-8")
-    print("Renderizando el panel con HyperFrames:", json.dumps({k: variables[k] for k in ("entrada", "cambio", "cta_desde", "duracion")}))
+    print("Renderizando el texto animado con HyperFrames:", variables["bloques"])
     subprocess.run([
-        "npx", "--yes", HYPERFRAMES, "render", str(ANIMADO), "-c", "reel.html", "--format", "mov",
+        "npx", "--yes", HYPERFRAMES, "render", str(ANIMADO), "-c", "texto.html", "--format", "mov",
         "--variables-file", str(archivo), "-o", str(destino), "--quiet",
     ], check=True)
     return destino
 
 
-def componer_dividido(datos, entrada, palabras, total):
+def componer_texto(datos, entrada, palabras, total):
     animado = datos.get("animado") or {}
     if isinstance(animado, str):
         animado = json.loads(animado)
     cara = detectar_cara(entrada)
     print("Cara detectada:", cara if cara else "no (se usan posiciones por defecto)")
+    gancho, claves, cta = textos_de_bloques(animado)
+    bloques = tiempos_de_bloques(gancho, claves, cta, palabras, total)
+    abajo = int(cara["cabeza"] - MARGEN_TEXTO) if cara else ABAJO_DEFECTO
+    variables = {"bloques": json.dumps(bloques, ensure_ascii=False), "abajo": abajo,
+                 "duracion": round(total, 2), "vista_previa": False}
+    capa = renderizar_texto(variables, TRABAJO / "texto.mov")
 
-    # Reels de caso (28/10): el panel 1 ya está en pantalla cuando empieza el gancho y el avatar
-    # arranca en la mitad inferior. En los demás, el avatar dice el gancho a pantalla completa.
-    caso = es_caso(animado)
-    t_gancho = fin_del_gancho(palabras)
-    t_entrada = 0.0 if caso else float(animado.get("entrada") or t_gancho)
-    ref = max(t_entrada, t_gancho)   # fin del gancho: de ahí se cuentan el panel 2 y el CTA
-    t_cta = inicio_ultima_oracion(palabras) if palabras else None
-    if t_cta is None or t_cta < ref + 5:
-        t_cta = max(ref + 5, total - 3.5)
-    # Panel 2: entra con la primera oración que empieza al menos 2,5 s después del fin del gancho
-    # (normalmente la tercera: en el molde T36 la segunda es la afirmación). Si no hay, a mitad de camino.
-    oraciones = [t for t in inicios_de_oracion(palabras) if t > ref + 2.5 and t < t_cta - 2.5]
-    t_cambio = float(animado.get("cambio") or (oraciones[0] if oraciones else (ref + t_cta) / 2))
-    if isinstance(animado.get("pasos"), list):
-        animado = dict(animado, pasos="|".join(str(x) for x in animado["pasos"]))
-    variables = dict(animado, entrada=round(t_entrada, 2), cambio=round(t_cambio, 2), cta_desde=round(t_cta, 2),
-                     duracion=round(total, 2), vista_previa=False, inicio_dividido=caso,
-                     afirmacion_desde=round(t_gancho, 2) if caso else 0)
-    variables.pop("caso", None)
-    capa = renderizar_panel(variables, TRABAJO / "panel.mov")
-
-    cabeza = cara["cabeza"] if cara else 420
-    y0 = int(min(max(cabeza - AIRE_CABEZA, 0), 1920 - MITAD))
-    if cara:
-        sub_y = min(max(MITAD + (cara["menton"] - y0) + 40, 1250), 1460)
-    else:
-        sub_y = 1440
-    e, d = t_entrada, TRANSICION
-    if caso:
-        y_expr, activo = str(MITAD), "1"   # el avatar ya está en la mitad inferior desde el primer cuadro
-    else:
-        y_expr = f"if(lt(t,{e + d:.3f}),{y0}+({MITAD - y0})*(1-pow(1-(t-{e:.3f})/{d},3)),{MITAD})"
-        activo = f"gte(t,{e:.3f})"
+    sub_y = min(max(cara["menton"] + 50, 950), 1250) if cara else POS_Y_DEFECTO
     filtros = [
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,split[completo][fuente]",
-        f"[fuente]crop=1080:{MITAD}:0:{y0}[ventana]",
-        f"[completo][ventana]overlay=x=0:y='{y_expr}':enable='{activo}'[base]",
-        "[1:v]format=yuva444p10le[panel]",
-        "[base][panel]overlay=0:0:eof_action=repeat[v1]",
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[base]",
+        "[1:v]format=yuva444p10le[texto]",
+        "[base][texto]overlay=0:0:eof_action=repeat[v1]",
     ]
     ultimo = "v1"
     if palabras:
@@ -446,7 +466,7 @@ def componer_dividido(datos, entrada, palabras, total):
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
     salida = TRABAJO / "final.mp4"
-    print(f"Componiendo en pantalla dividida{' (Reel de caso)' if caso else ''}: panel 1 desde {e:.2f} s, panel 2 desde {t_cambio:.2f} s, CTA desde {t_cta:.2f} s, ventana del avatar desde y={y0}")
+    print(f"Componiendo con texto animado: {len(bloques)} bloques, zona de texto hasta y={abajo}, subtítulos en y={sub_y}")
     subprocess.run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada), "-i", str(capa),
         "-filter_complex", ";".join(filtros), "-map", f"[{ultimo}]", "-map", "0:a?",
@@ -484,7 +504,7 @@ def componer(datos):
             print("Aviso: no se encontraron todos los cortes; el video queda sin cambio de encuadre")
 
     if datos.get("animado"):
-        return componer_dividido(datos, entrada, palabras, total)
+        return componer_texto(datos, entrada, palabras, total)
 
     ventanas = ventanas_placas(placas, palabras, total)
     if palabras and datos.get("contacto", True):
