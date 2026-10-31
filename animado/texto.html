@@ -61,7 +61,11 @@
   document.body.appendChild(medidor);
   function renglones(texto, tam) {
     medidor.style.fontSize = tam + "px";
-    const palabras = String(texto).trim().split(/\s+/);
+    // "$" nunca queda solo al final de un renglón: va pegado al número que lo sigue ("$ 14.500.000")
+    const palabras = String(texto).trim().split(/\s+/).reduce((acc, w) => {
+      if (acc.length && acc[acc.length - 1] === "$") acc[acc.length - 1] = "$\u00a0" + w; else acc.push(w);
+      return acc;
+    }, []);
     const res = [];
     let actual = [];
     for (const p of palabras) {
