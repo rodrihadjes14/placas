@@ -14,6 +14,9 @@ pieza.json:
               En un post, si la primera es un .mp4 (el post animado que arma publicar-pieza), se
               publica como video: Reel en Instagram (también aparece en el feed) y video en Facebook.
     redes     "IG,FB" por defecto
+    ubicacion ID de Meta de la ubicación (página de Facebook con lugar), opcional. Se etiqueta en
+              Instagram (location_id) y en Facebook (place). Si Meta la rechaza, la pieza se publica
+              igual sin ubicación.
 
 Variables de entorno: META_TOKEN (secreto META_PAGE_TOKEN), IG_USER_ID, FB_PAGE_ID, GRAPH_VERSION.
 
@@ -36,6 +39,7 @@ TOKEN = os.environ.get("META_TOKEN", "")
 IG = os.environ.get("IG_USER_ID", "")
 PAGINA = os.environ.get("FB_PAGE_ID", "")
 _token_pagina = None
+UBICACION = ""   # ID de Meta de la ubicación de la pieza (lo fija main a partir de pieza.json)
 
 
 def pedir(url, datos=None, cabeceras=None, metodo=None):
@@ -72,6 +76,16 @@ def token_pagina():
     return _token_pagina
 
 
+def con_ubicacion(funcion, clave, **params):
+    """Llama a la Graph API sumando la ubicación; si Meta la rechaza, reintenta sin ella."""
+    if UBICACION:
+        try:
+            return funcion(**params, **{clave: UBICACION})
+        except RuntimeError as e:
+            print(f"Ubicación {UBICACION} rechazada ({e}); se publica sin ubicación")
+    return funcion(**params)
+
+
 # ---------- Instagram ----------
 
 def esperar_contenedor(contenedor, minutos):
@@ -93,7 +107,8 @@ def es_video(url):
 def ig_post(media, caption):
     if es_video(media[0]):
         return ig_reel(media, caption)
-    c = graph("POST", f"{IG}/media", image_url=media[0], caption=caption)["id"]
+    c = con_ubicacion(lambda **p: graph("POST", f"{IG}/media", **p), "location_id",
+                      image_url=media[0], caption=caption)["id"]
     esperar_contenedor(c, 3)
     return graph("POST", f"{IG}/media_publish", creation_id=c)["id"]
 
@@ -106,14 +121,15 @@ def ig_carrusel(media, caption):
         h = graph("POST", f"{IG}/media", image_url=url, is_carousel_item="true")["id"]
         esperar_contenedor(h, 3)
         hijos.append(h)
-    c = graph("POST", f"{IG}/media", media_type="CAROUSEL", children=",".join(hijos), caption=caption)["id"]
+    c = con_ubicacion(lambda **p: graph("POST", f"{IG}/media", **p), "location_id",
+                      media_type="CAROUSEL", children=",".join(hijos), caption=caption)["id"]
     esperar_contenedor(c, 3)
     return graph("POST", f"{IG}/media_publish", creation_id=c)["id"]
 
 
 def ig_reel(media, caption):
-    c = graph("POST", f"{IG}/media", media_type="REELS", video_url=media[0], caption=caption,
-              share_to_feed="true")["id"]
+    c = con_ubicacion(lambda **p: graph("POST", f"{IG}/media", **p), "location_id",
+                      media_type="REELS", video_url=media[0], caption=caption, share_to_feed="true")["id"]
     esperar_contenedor(c, 15)
     return graph("POST", f"{IG}/media_publish", creation_id=c)["id"]
 
@@ -123,7 +139,8 @@ def ig_reel(media, caption):
 def fb_post(media, caption):
     if es_video(media[0]):
         return fb_video(media, caption)
-    res = graph("POST", f"{PAGINA}/photos", token=token_pagina(), url=media[0], message=caption)
+    res = con_ubicacion(lambda **p: graph("POST", f"{PAGINA}/photos", token=token_pagina(), **p), "place",
+                        url=media[0], message=caption)
     return res.get("post_id") or res["id"]
 
 
@@ -139,7 +156,8 @@ def fb_carrusel(media, caption):
     tok = token_pagina()
     fotos = [graph("POST", f"{PAGINA}/photos", token=tok, url=u, published="false")["id"] for u in media]
     params = {f"attached_media[{i}]": json.dumps({"media_fbid": f}) for i, f in enumerate(fotos)}
-    return graph("POST", f"{PAGINA}/feed", token=tok, message=caption, **params)["id"]
+    return con_ubicacion(lambda **p: graph("POST", f"{PAGINA}/feed", token=tok, **p), "place",
+                         message=caption, **params)["id"]
 
 
 def fb_reel(media, caption, registrar=None):
@@ -148,8 +166,8 @@ def fb_reel(media, caption, registrar=None):
     video_id = inicio["video_id"]
     subida = inicio.get("upload_url") or f"https://rupload.facebook.com/video-upload/{VERSION}/{video_id}"
     pedir(subida, b"", {"Authorization": f"OAuth {tok}", "file_url": media[0]}, metodo="POST")
-    graph("POST", f"{PAGINA}/video_reels", token=tok, upload_phase="finish", video_id=video_id,
-          video_state="PUBLISHED", description=caption)
+    con_ubicacion(lambda **p: graph("POST", f"{PAGINA}/video_reels", token=tok, **p), "place",
+                  upload_phase="finish", video_id=video_id, video_state="PUBLISHED", description=caption)
     # Con "finish" aceptado, Facebook ya tiene el Reel y lo publica solo. Se registra el ID en este
     # momento para que, pase lo que pase con la consulta de estado, un reintento nunca lo vuelva a subir.
     if registrar:
@@ -210,7 +228,9 @@ def validar(pieza):
 
 
 def main():
+    global UBICACION
     pieza = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+    UBICACION = str(pieza.get("ubicacion") or "").strip()
     carpeta = pathlib.Path(sys.argv[2])
     if "--validar" in sys.argv:
         validar(pieza)

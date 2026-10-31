@@ -28,6 +28,9 @@ on:
       redes:
         description: Redes donde publicar
         default: IG,FB
+      ubicacion:
+        description: ID de Meta de la ubicación (opcional, pestaña Ubicaciones)
+        default: ''
       modo:
         description: validar (no publica) o publicar
         default: validar
@@ -69,7 +72,8 @@ jobs:
           if isinstance(media, str):
               media = media.split()
           pieza = {"id": ident, "formato": p.get("formato", ""), "caption": p.get("caption", ""),
-                   "media": [m.strip() for m in media if m.strip()], "redes": p.get("redes") or "IG,FB"}
+                   "media": [m.strip() for m in media if m.strip()], "redes": p.get("redes") or "IG,FB",
+                   "ubicacion": str(p.get("ubicacion") or "").strip()}
           open("pieza.json", "w", encoding="utf-8").write(json.dumps(pieza, ensure_ascii=False))
           modo = "publicar" if os.environ.get("GITHUB_EVENT_NAME") == "repository_dispatch" else str(p.get("modo") or "validar")
           es_post = str(pieza["formato"]).strip().lower().startswith("post")
