@@ -27,6 +27,7 @@ import datetime
 import json
 import os
 import pathlib
+import re
 import sys
 import time
 import urllib.error
@@ -127,9 +128,36 @@ def ig_carrusel(media, caption):
     return graph("POST", f"{IG}/media_publish", creation_id=c)["id"]
 
 
+def portada_de(url_video):
+    """Portada que arma el flujo de video (cuadro del gancho con la cara más relajada), subida a Cloudinary
+    junto al video final como final-<ID>-<VIDEO_ID>-portada.jpg. Devuelve su dirección o "" si no existe."""
+    m = re.match(r"(https://res\.cloudinary\.com/[^/]+)/video/upload/(?:v\d+/)?(final-[^/]+)\.mp4$", str(url_video))
+    if not m:
+        return ""
+    url = f"{m.group(1)}/image/upload/{m.group(2)}-portada.jpg"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=30) as r:
+            return url if r.status == 200 else ""
+    except Exception:
+        return ""
+
+
 def ig_reel(media, caption):
-    c = con_ubicacion(lambda **p: graph("POST", f"{IG}/media", **p), "location_id",
-                      media_type="REELS", video_url=media[0], caption=caption, share_to_feed="true")["id"]
+    extra = {"share_to_feed": "true"}
+    portada = portada_de(media[0])
+    if portada:
+        extra["cover_url"] = portada
+        print("IG: portada", portada)
+    try:
+        c = con_ubicacion(lambda **p: graph("POST", f"{IG}/media", **p), "location_id",
+                          media_type="REELS", video_url=media[0], caption=caption, **extra)["id"]
+    except RuntimeError as e:
+        if "cover_url" not in extra:
+            raise
+        print(f"IG: la portada fue rechazada ({e}); se publica con la tapa automática")
+        extra.pop("cover_url")
+        c = con_ubicacion(lambda **p: graph("POST", f"{IG}/media", **p), "location_id",
+                          media_type="REELS", video_url=media[0], caption=caption, **extra)["id"]
     esperar_contenedor(c, 15)
     return graph("POST", f"{IG}/media_publish", creation_id=c)["id"]
 
@@ -160,6 +188,29 @@ def fb_carrusel(media, caption):
                          message=caption, **params)["id"]
 
 
+def fb_portada(video_id, url_video, tok):
+    """Intenta fijar la portada del Reel de Facebook (POST /{video_id}/thumbnails). Si Facebook no lo
+    acepta, el Reel queda con la tapa automática: nunca frena la publicación."""
+    portada = portada_de(url_video)
+    if not portada:
+        return
+    try:
+        with urllib.request.urlopen(portada, timeout=60) as r:
+            imagen = r.read()
+        limite = "----portada" + str(int(time.time()))
+        partes = []
+        for nombre, valor in (("access_token", tok), ("is_preferred", "true")):
+            partes.append(f"--{limite}\r\nContent-Disposition: form-data; name=\"{nombre}\"\r\n\r\n{valor}\r\n".encode())
+        partes.append(f"--{limite}\r\nContent-Disposition: form-data; name=\"source\"; filename=\"portada.jpg\"\r\n"
+                      "Content-Type: image/jpeg\r\n\r\n".encode() + imagen + b"\r\n")
+        partes.append(f"--{limite}--\r\n".encode())
+        pedir(f"{BASE}/{video_id}/thumbnails", b"".join(partes),
+              {"Content-Type": f"multipart/form-data; boundary={limite}"}, metodo="POST")
+        print("FB: portada fijada", portada)
+    except Exception as e:
+        print(f"FB: no se pudo fijar la portada ({e}); queda la tapa automática")
+
+
 def fb_reel(media, caption, registrar=None):
     tok = token_pagina()
     inicio = graph("POST", f"{PAGINA}/video_reels", token=tok, upload_phase="start")
@@ -185,9 +236,11 @@ def fb_reel(media, caption, registrar=None):
         if st.get("video_status") == "error":
             raise RuntimeError("Facebook no pudo procesar el Reel: " + json.dumps(st)[:200])
         if (st.get("publishing_phase") or {}).get("status") == "complete" or st.get("video_status") == "ready":
+            fb_portada(video_id, media[0], tok)
             return video_id
         time.sleep(10)
     print("FB: no se pudo confirmar el estado del Reel; se da por publicado porque Facebook aceptó la subida")
+    fb_portada(video_id, media[0], tok)
     return video_id
 
 

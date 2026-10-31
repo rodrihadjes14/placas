@@ -34,7 +34,9 @@ Ubicación: se detecta la cara del avatar en varios cuadros del video. Si la pla
 encabezado de Reels y la cabeza, va arriba (si no entra en tamaño normal, en versión compacta).
 Si no hay lugar arriba, va en versión compacta sobre el pecho, debajo de los subtítulos.
 
-Deja el resultado en final.mp4 (en la carpeta de trabajo).
+Deja el resultado en final.mp4 (en la carpeta de trabajo). En el modo de texto animado deja además portada.jpg:
+un cuadro del gancho con su bloque de texto (sin subtítulos), en el instante en que la cara está más relajada
+según MediaPipe; publicar.py la usa como tapa del Reel.
 """
 import json
 import os
@@ -474,6 +476,79 @@ def ventanas_broll(animado, palabras, bloques, total):
     return sorted(res)
 
 
+MODELO_CARA = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+
+
+def tension_cara(videos, tiempos):
+    """Para cada tiempo devuelve un puntaje de tensión del gesto (0 = cara relajada) con los blendshapes de
+    MediaPipe: boca abierta, sonrisa, labios fruncidos o estirados, cejas levantadas o fruncidas y ojos
+    entrecerrados. None si no hay cara o si MediaPipe no está disponible."""
+    import cv2
+    import mediapipe as mp
+    from mediapipe.tasks import python as mpt
+    from mediapipe.tasks.python import vision
+    modelo = TRABAJO / "face_landmarker.task"
+    if not modelo.exists():
+        urllib.request.urlretrieve(MODELO_CARA, modelo)
+    opciones = vision.FaceLandmarkerOptions(base_options=mpt.BaseOptions(model_asset_path=str(modelo)),
+                                            output_face_blendshapes=True, num_faces=1)
+    detector = vision.FaceLandmarker.create_from_options(opciones)
+    cap = cv2.VideoCapture(str(videos))
+    res = []
+    for t in tiempos:
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ok, cuadro = cap.read()
+        if not ok:
+            res.append(None)
+            continue
+        r = detector.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(cuadro, cv2.COLOR_BGR2RGB)))
+        if not r.face_blendshapes:
+            res.append(None)
+            continue
+        b = {c.category_name: c.score for c in r.face_blendshapes[0]}
+        par = lambda n: (b.get(n + "Left", 0) + b.get(n + "Right", 0)) / 2
+        parpadeo = par("eyeBlink")
+        res.append(b.get("jawOpen", 0) + par("mouthSmile") + par("mouthStretch") + b.get("mouthPucker", 0)
+                   + b.get("mouthFunnel", 0) + 0.6 * b.get("browInnerUp", 0) + 0.6 * par("browDown")
+                   + par("mouthFrown") + (3.0 * parpadeo if parpadeo > 0.3 else 0.5 * parpadeo))
+    cap.release()
+    return res
+
+
+def elegir_portada(entrada, capa, desde, hasta):
+    """Arma la portada del Reel: un cuadro del gancho con el bloque de texto ya completo (sin subtítulos),
+    eligiendo el instante en que la cara está más relajada. Deja portada.jpg y devuelve el segundo elegido."""
+    inicio, fin = desde + 1.1, hasta - 0.35            # el texto termina de entrar ~1 s después de su inicio
+    if fin <= inicio:
+        inicio = fin = max(desde, (desde + hasta) / 2)
+    tiempos = [round(inicio + 0.1 * k, 2) for k in range(int((fin - inicio) / 0.1) + 1)] or [inicio]
+    elegido = tiempos[len(tiempos) // 2]
+    try:
+        puntajes = tension_cara(entrada, tiempos)
+        # se suaviza con los vecinos para no caer en un cuadro de transición entre dos gestos
+        suaves = []
+        for i, p in enumerate(puntajes):
+            vecinos = [x for x in puntajes[max(0, i - 1):i + 2] if x is not None]
+            suaves.append(None if p is None else 0.6 * p + 0.4 * (sum(vecinos) / len(vecinos)))
+        validos = [(s, t) for s, t in zip(suaves, tiempos) if s is not None]
+        if validos:
+            puntaje, elegido = min(validos)
+            print(f"Portada: segundo {elegido} (tensión del gesto {puntaje:.3f} entre {len(validos)} cuadros)")
+        else:
+            print("Aviso: no se detectó la cara para la portada; se usa el medio del gancho")
+    except Exception as e:
+        print(f"Aviso: no se pudo analizar la cara para la portada ({e}); se usa el medio del gancho")
+    destino = TRABAJO / "portada.jpg"
+    subprocess.run([
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{elegido:.2f}", "-i", str(entrada),
+        "-ss", f"{elegido:.2f}", "-i", str(capa), "-filter_complex",
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[b];"
+        "[1:v]format=yuva444p10le[t];[b][t]overlay=0:0",
+        "-frames:v", "1", "-q:v", "2", str(destino),
+    ], check=True)
+    return elegido
+
+
 def descargar_broll(ventanas):
     archivos = []
     for i, (_, _, url, clip) in enumerate(ventanas):
@@ -551,6 +626,11 @@ def componer_texto(datos, entrada, palabras, total):
         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{total:.2f}", str(salida),
     ], check=True)
+    if gancho and bloques:
+        try:
+            elegir_portada(entrada, capa, bloques[0]["desde"], bloques[0]["hasta"])
+        except Exception as e:                 # la portada nunca frena el video
+            print(f"Aviso: no se pudo armar la portada ({e})")
     return salida
 
 
