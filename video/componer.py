@@ -19,6 +19,12 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
                CTA desde la última oración hasta el final. Los subtítulos karaoke quedan a la altura del
                pecho todo el video. En ese modo no se usan las placas ni la placa de contacto.
                (Hasta el 30/10/2026 este modo armaba la pantalla dividida con animado/reel.html.)
+               Desde el 31/10/2026 "animado" puede traer además "broll": hasta dos clips de la pestaña
+               BRoll de la planilla, [{"ancla": "primeras palabras de la oración", "clip": "B07",
+               "url": "https://..."}]. Cada clip tapa al avatar durante esa oración (de 1,5 a 4,5 s,
+               con la voz sonando), nunca en el gancho, en las dos últimas oraciones ni encima de un
+               bloque de frase clave: si una frase clave sigue en pantalla cuando entra el clip, se la
+               corta ahí. El texto animado y los subtítulos quedan por encima del clip.
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
                el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
@@ -352,6 +358,9 @@ HYPERFRAMES = "hyperframes@0.8.173"
 MARGEN_TEXTO = 30            # aire entre el bloque de texto y la cabeza
 ABAJO_DEFECTO = 640          # borde inferior de la zona de texto si no se detecta la cara
 DURACION_CLAVE = 4.5         # segundos máximos de cada bloque de frase clave
+BROLL_MAX = 4.5              # segundos máximos de cada clip de b-roll
+BROLL_MIN = 1.5              # un clip que quedaría más corto no se usa
+BROLL_FUNDIDO = 0.2
 
 
 def fin_del_gancho(palabras):
@@ -428,6 +437,56 @@ def tiempos_de_bloques(gancho, claves, cta, palabras, total):
     return [{k: b[k] for k in ("chica", "grande", "desde", "hasta")} for b in res if b["hasta"] - b["desde"] >= 1.0]
 
 
+def ventanas_broll(animado, palabras, bloques, total):
+    """Ubica los clips de b-roll (animado["broll"]) en sus oraciones y ajusta los bloques de texto para que
+    no coincidan. Devuelve [(desde, hasta, url, clip)] y modifica "bloques" en el lugar."""
+    items = [b for b in (animado.get("broll") or []) if isinstance(b, dict) and str(b.get("url", "")).strip()][:2]
+    if not items or not palabras:
+        return []
+    inicios = inicios_de_oracion(palabras)
+    t_gancho = fin_del_gancho(palabras)
+    limite = inicios[-2] - 0.1 if len(inicios) >= 3 else total - 3.5   # antes de la afirmación del estudio
+    res = []
+    for b in items:
+        t = ubicar_ancla(str(b.get("ancla", "")), palabras)
+        if t is None:
+            print(f"Aviso: no se encontró el ancla del b-roll {b.get('clip', '')!r}; no se usa")
+            continue
+        desde = max(t, t_gancho)
+        siguientes = [o for o in inicios if o > desde + 0.3]
+        hasta = min((siguientes[0] - 0.05) if siguientes else total, desde + BROLL_MAX, limite)
+        for x in bloques:                      # no tapar un bloque de texto que empieza después
+            if desde < x["desde"] < hasta:
+                hasta = x["desde"] - 0.1
+        for d, h, *_ in res:                   # ni otro clip
+            if d < hasta and desde < h:
+                hasta = min(hasta, d - 0.1) if desde < d else hasta
+                desde = max(desde, h + 0.1) if desde >= d else desde
+        if hasta - desde < BROLL_MIN:
+            print(f"Aviso: el b-roll {b.get('clip', '')!r} no tiene lugar suficiente; no se usa")
+            continue
+        res.append((round(desde, 2), round(hasta, 2), str(b["url"]).strip(), str(b.get("clip", ""))))
+    for d, h, *_ in res:                       # una frase clave que sigue en pantalla se corta al entrar el clip
+        for x in bloques:
+            if x["desde"] < d < x["hasta"]:
+                x["hasta"] = round(d - 0.05, 2)
+    bloques[:] = [x for x in bloques if x["hasta"] - x["desde"] >= 1.0]
+    return sorted(res)
+
+
+def descargar_broll(ventanas):
+    archivos = []
+    for i, (_, _, url, clip) in enumerate(ventanas):
+        destino = TRABAJO / f"broll-{i}.mp4"
+        if pathlib.Path(url).is_file():
+            destino.write_bytes(pathlib.Path(url).read_bytes())
+        else:
+            print("Descargando b-roll", clip or url)
+            urllib.request.urlretrieve(url, destino)
+        archivos.append(destino)
+    return archivos
+
+
 def renderizar_texto(variables, destino):
     archivo = TRABAJO / "variables-texto.json"
     archivo.write_text(json.dumps(variables, ensure_ascii=False), encoding="utf-8")
@@ -447,17 +506,35 @@ def componer_texto(datos, entrada, palabras, total):
     print("Cara detectada:", cara if cara else "no (se usan posiciones por defecto)")
     gancho, claves, cta = textos_de_bloques(animado)
     bloques = tiempos_de_bloques(gancho, claves, cta, palabras, total)
+    broll = ventanas_broll(animado, palabras, bloques, total)
+    if broll:
+        print("B-roll:", [(d, h, c) for d, h, _, c in broll])
+    try:
+        clips = descargar_broll(broll)
+    except Exception as e:                     # un clip que no baja no frena el video
+        print(f"Aviso: no se pudo descargar el b-roll ({e}); el video sale sin b-roll")
+        broll, clips = [], []
     abajo = int(cara["cabeza"] - MARGEN_TEXTO) if cara else ABAJO_DEFECTO
     variables = {"bloques": json.dumps(bloques, ensure_ascii=False), "abajo": abajo,
                  "duracion": round(total, 2), "vista_previa": False}
     capa = renderizar_texto(variables, TRABAJO / "texto.mov")
 
     sub_y = min(max(cara["menton"] + 50, 950), 1250) if cara else POS_Y_DEFECTO
-    filtros = [
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[base]",
-        "[1:v]format=yuva444p10le[texto]",
-        "[base][texto]overlay=0:0:eof_action=repeat[v1]",
-    ]
+    filtros = ["[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[base]"]
+    entradas = ["-i", str(entrada), "-i", str(capa)]
+    fondo = "base"
+    for k, ((desde, hasta, _, _), clip) in enumerate(zip(broll, clips)):
+        n = k + 2
+        entradas += ["-stream_loop", "-1", "-i", str(clip)]
+        largo = hasta - desde
+        filtros.append(
+            f"[{n}:v]trim=duration={largo:.2f},setpts=PTS-STARTPTS+{desde:.2f}/TB,"
+            "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuva420p,"
+            f"fade=t=in:st={desde:.2f}:d={BROLL_FUNDIDO}:alpha=1,"
+            f"fade=t=out:st={hasta - BROLL_FUNDIDO:.2f}:d={BROLL_FUNDIDO}:alpha=1[b{k}]")
+        filtros.append(f"[{fondo}][b{k}]overlay=0:0:enable='between(t,{desde:.2f},{hasta:.2f})':eof_action=pass[f{k}]")
+        fondo = f"f{k}"
+    filtros += ["[1:v]format=yuva444p10le[texto]", f"[{fondo}][texto]overlay=0:0:eof_action=repeat[v1]"]
     ultimo = "v1"
     if palabras:
         ass = TRABAJO / "subtitulos.ass"
@@ -466,9 +543,10 @@ def componer_texto(datos, entrada, palabras, total):
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
     salida = TRABAJO / "final.mp4"
-    print(f"Componiendo con texto animado: {len(bloques)} bloques, zona de texto hasta y={abajo}, subtítulos en y={sub_y}")
+    print(f"Componiendo con texto animado: {len(bloques)} bloques, {len(broll)} clips de b-roll, "
+          f"zona de texto hasta y={abajo}, subtítulos en y={sub_y}")
     subprocess.run([
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada), "-i", str(capa),
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *entradas,
         "-filter_complex", ";".join(filtros), "-map", f"[{ultimo}]", "-map", "0:a?",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{total:.2f}", str(salida),
