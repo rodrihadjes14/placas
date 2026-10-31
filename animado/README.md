@@ -14,7 +14,7 @@ el diseño (Bricolage Grotesque, neutros y amarillo) queda fijo en la plantilla.
 - `carrusel.html`: diapositiva animada 1080x1350, 7 s. Gráfico opcional: grilla de días.
   Hoy no se usa: los carruseles se publican con las placas estáticas.
 - `texto.html`: capa de texto animado del Reel (desde el 30/10/2026). El avatar queda a pantalla completa
-  y arriba de la cabeza aparecen bloques de dos líneas: una chica en minúscula (fondo blanco, letras negras)
+  y arriba de la cabeza aparecen bloques de dos líneas: una chica en mayúscula y un poco más chica que la grande (fondo blanco, letras negras)
   y una grande en mayúscula sobre banda amarilla, en el gancho, en las frases clave y en el CTA.
   `componer.py` calcula los tiempos y la altura según la cara; se exporta en MOV con alfa.
 - `reel.html`: (en desuso desde el 30/10/2026) capa gráfica del Reel en pantalla dividida, 1080x1920 (paneles arriba, avatar abajo).

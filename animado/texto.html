@@ -12,7 +12,7 @@
 <script src="assets/gsap.min.js"></script>
 <style>
   /* Capa de texto del Reel con el avatar a pantalla completa (desde el 30/10/2026).
-     Cada bloque: línea chica en minúscula (fondo blanco, letras negras) y línea grande en mayúscula
+     Cada bloque: línea chica en mayúscula a 52 px (fondo blanco, letras negras; desde el 31/10/2026) y línea grande en mayúscula
      sobre banda amarilla. Van arriba de la cabeza del avatar, entre el encabezado de Reels (≈210 px)
      y "abajo". Con vista_previa=false el fondo queda transparente y se exporta en MOV con alfa. */
   @font-face { font-family: "Bricolage"; src: url("assets/fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
@@ -22,8 +22,8 @@
   #root { position:relative; width:100%; height:100%; overflow:hidden; font-family:"Bricolage", Arial, sans-serif; color:var(--carbon); }
 
   .bloque { position:absolute; left:70px; right:70px; display:flex; flex-direction:column; align-items:center; text-align:center; opacity:0; }
-  .chica { display:inline-block; background:var(--blanco); color:var(--carbon); font-size:40px; line-height:1; font-weight:700;
-           letter-spacing:-.01em; text-transform:lowercase; padding:12px 22px 14px; border-radius:6px; margin-bottom:14px;
+  .chica { display:inline-block; max-width:940px; background:var(--blanco); color:var(--carbon); font-size:52px; line-height:1.05; font-weight:800;
+           letter-spacing:0; text-transform:uppercase; padding:12px 24px 14px; border-radius:6px; margin-bottom:14px;
            box-shadow:0 6px 20px rgba(0,0,0,.18); }
   .grande { font-size:86px; line-height:1.12; font-weight:800; letter-spacing:0; text-transform:uppercase; }
   .renglon { display:block; }
@@ -86,7 +86,7 @@
     for (; esc1 >= 0.6; esc1 -= 0.05) {
       const tam = Math.round(86 * esc1);
       const filas = renglones(b.grande, tam);
-      el.innerHTML = (b.chica ? '<div class="chica" style="font-size:' + Math.round(40 * Math.max(esc1, 0.8)) + 'px">' + esc(b.chica) + '</div>' : "") +
+      el.innerHTML = (b.chica ? '<div class="chica" style="font-size:' + Math.round(52 * Math.max(esc1, 0.8)) + 'px">' + esc(b.chica) + '</div>' : "") +
         '<div class="grande" style="font-size:' + tam + 'px">' + filas.map((f) =>
           '<span class="renglon"><span class="banda"><i class="fondo"></i>' + f.map((w) => '<span class="w">' + esc(w) + '</span>').join("") + '</span></span>').join("") + '</div>';
       alto = el.offsetHeight;
