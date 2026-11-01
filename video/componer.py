@@ -21,12 +21,11 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
                (Hasta el 30/10/2026 este modo armaba la pantalla dividida con animado/reel.html.)
                Desde el 31/10/2026 "animado" puede traer además "broll": hasta dos clips de la pestaña
                BRoll de la planilla, [{"ancla": "primeras palabras de la oración", "clip": "B07",
-               "url": "https://..."}]. Desde el 01/11/2026 los clips se reparten de forma pareja: el
-               desarrollo (del fin del gancho a las dos últimas oraciones) se divide en tramos iguales y
-               cada clip ocupa la segunda mitad de su tramo (de 1,5 a 4,5 s, con la voz sonando), así que
-               entre los dos clips siempre queda avatar con su frase clave. El ancla solo decide el orden
-               de los clips. Nunca van en el gancho ni encima de un bloque de frase clave: la que sigue en
-               pantalla se corta al entrar el clip y la que entraría durante el clip pasa a después.
+               "url": "https://..."}]. Desde el 01/11/2026 cada clip va en la segunda parte de una
+               oración del desarrollo (después de que su frase clave se vio 1,8 s), eligiendo las oraciones
+               que reparten los clips de forma más pareja y evitando dos oraciones seguidas; de 1,5 a 4,5 s,
+               con la voz sonando. Nunca en el gancho ni en las dos últimas oraciones, ni encima de un
+               bloque de texto. El ancla solo decide el orden de los clips.
                El texto animado y los subtítulos quedan por encima del clip.
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
@@ -366,8 +365,7 @@ DURACION_CLAVE = 4.5         # segundos máximos de cada bloque de frase clave
 BROLL_MAX = 4.5              # segundos máximos de cada clip de b-roll
 BROLL_MIN = 1.5              # un clip que quedaría más corto no se usa
 BROLL_FUNDIDO = 0.2
-BROLL_PROPORCION = 0.5     # parte de cada tramo del desarrollo que ocupa su clip (el resto es avatar)
-BROLL_SEPARACION = 0.3     # aire mínimo entre el fin de un clip y el tramo siguiente
+BROLL_TEXTO_MIN = 1.8      # segundos que la frase clave de una oración se ve antes de que entre su clip
 
 
 def fin_del_gancho(palabras):
@@ -444,53 +442,73 @@ def tiempos_de_bloques(gancho, claves, cta, palabras, total):
     return [{k: b[k] for k in ("chica", "grande", "desde", "hasta")} for b in res if b["hasta"] - b["desde"] >= 1.0]
 
 
-def _arranque_de_palabra(t, palabras, margen=0.5):
-    """Corre t al comienzo de palabra más cercano (dentro de ±margen) para que el clip entre con el habla."""
-    cerca = [float(p["s"]) for p in palabras if abs(float(p["s"]) - t) <= margen]
-    return min(cerca, key=lambda x: abs(x - t)) if cerca else t
+def candidatos_broll(inicios, arranques, bloques, t_gancho, limite, total):
+    """Para cada oración del desarrollo (entre el gancho y "limite") devuelve el tramo donde puede ir un clip:
+    (desde, hasta, índice de la oración). El clip entra después de que la frase clave de la oración se vio
+    BROLL_TEXTO_MIN segundos (o al empezar la oración, si no tiene) y termina con la oración."""
+    claves = [x["desde"] for x in bloques if t_gancho - 0.3 < x["desde"] < limite]
+    res = []
+    for i, ini_o in enumerate(inicios):
+        if ini_o < t_gancho - 0.3 or ini_o >= limite:
+            continue
+        fin_o = inicios[i + 1] - 0.05 if i + 1 < len(inicios) else total
+        texto = [c for c in claves if ini_o - 0.3 <= c < fin_o]
+        minimo = (max(texto) + BROLL_TEXTO_MIN) if texto else ini_o
+        desde = next((a for a in arranques if a >= minimo - 0.02), None)
+        if desde is None:
+            continue
+        hasta = min(desde + BROLL_MAX, fin_o, limite)
+        if hasta - desde >= BROLL_MIN:
+            res.append((round(desde, 2), round(hasta, 2), i))
+    return res
 
 
 def ventanas_broll(animado, palabras, bloques, total):
-    """Reparte los clips de b-roll (animado["broll"]) de forma pareja a lo largo del desarrollo y ajusta los
-    bloques de texto para que no coincidan. Devuelve [(desde, hasta, url, clip)] y modifica "bloques".
+    """Reparte los clips de b-roll (animado["broll"]) a lo largo del desarrollo y ajusta los bloques de texto
+    para que no coincidan. Devuelve [(desde, hasta, url, clip)] y modifica "bloques" en el lugar.
 
-    Desde el 01/11/2026 el desarrollo (del fin del gancho a la afirmación del estudio) se divide en tantos
-    tramos iguales como clips haya: cada tramo arranca con texto o avatar y termina con su clip, así que entre
-    un clip y el siguiente siempre queda un tramo de avatar con su frase clave (texto → clip → texto → clip).
-    El orden de los clips sigue el orden de sus anclas en la voz; el ancla ya no fija el segundo de entrada."""
+    Desde el 01/11/2026: cada clip va en la segunda parte de una oración del desarrollo (después del gancho y
+    antes de las dos últimas oraciones). Si la oración tiene frase clave, el clip entra cuando la frase ya
+    estuvo BROLL_TEXTO_MIN segundos en pantalla, así el texto nunca se corre de su oración. Entre las
+    oraciones posibles se eligen las que reparten los clips de forma más pareja en el tiempo, evitando dos
+    oraciones seguidas. El ancla de cada clip solo decide el orden en que se usan. Un clip puede tapar un
+    corte de escena de HeyGen: el salto queda disimulado igual que con el zoom."""
+    from itertools import combinations
     items = [b for b in (animado.get("broll") or []) if isinstance(b, dict) and str(b.get("url", "")).strip()][:2]
     if not items or not palabras:
         return []
     inicios = inicios_de_oracion(palabras)
     t_gancho = fin_del_gancho(palabras)
-    n = len(items)
-    limite = inicios[-2] - 0.1 if len(inicios) >= 3 else total - 3.5   # antes de la afirmación del estudio
-    if (limite - t_gancho) / n < BROLL_MIN / BROLL_PROPORCION and len(inicios) >= 2:
-        limite = inicios[-1] - 0.1             # Reel corto: el desarrollo llega hasta la última oración
-    largo = limite - t_gancho
-    if largo / n < BROLL_MIN / BROLL_PROPORCION:
-        print("Aviso: el desarrollo es muy corto para el b-roll; el video sale sin b-roll")
+    arranques = [float(p["s"]) for p in palabras]
+    limites = [inicios[-2] - 0.1 if len(inicios) >= 3 else total - 3.5]   # antes de la afirmación del estudio
+    if len(inicios) >= 2:
+        limites.append(inicios[-1] - 0.1)      # Reel corto: si no hay lugar, el desarrollo llega a la última oración
+    for limite in limites:
+        candidatos = candidatos_broll(inicios, arranques, bloques, t_gancho, limite, total)
+        if candidatos:
+            break
+    n = min(len(items), len(candidatos))
+    if n == 0:
+        print("Aviso: no hay oraciones del desarrollo con lugar para el b-roll; el video sale sin b-roll")
         return []
+
+    largo = max(limite - t_gancho, 0.1)
+    ideales = [t_gancho + largo * (2 * k + 1) / (2 * n) for k in range(n)]
+
+    def puntaje(combo):
+        p = sum(abs((d + h) / 2 - c) for (d, h, _), c in zip(combo, ideales))
+        p += sum(3.0 for a, b in zip(combo, combo[1:]) if b[2] - a[2] == 1)   # oraciones seguidas
+        return p - 0.5 * sum(h - d for d, h, _ in combo)                       # y algo de premio al largo
+    elegidos = min(combinations(candidatos, n), key=puntaje)
 
     def orden(b):
         t = ubicar_ancla(str(b.get("ancla", "")), palabras)
         return t if t is not None else float("inf")
-    items = sorted(items, key=orden)
+    items = sorted(items, key=orden)[:n]
+    res = [(d, h, str(b["url"]).strip(), str(b.get("clip", ""))) for (d, h, _), b in zip(elegidos, items)]
 
-    tramo = largo / n
-    res = []
-    for k, b in enumerate(items):
-        fin_tramo = t_gancho + tramo * (k + 1) - BROLL_SEPARACION / 2
-        dur = min(BROLL_MAX, tramo * BROLL_PROPORCION)
-        desde = _arranque_de_palabra(fin_tramo - dur, palabras)
-        hasta = min(desde + dur, fin_tramo, limite)
-        if hasta - desde < BROLL_MIN:
-            print(f"Aviso: el b-roll {b.get('clip', '')!r} no tiene lugar suficiente; no se usa")
-            continue
-        res.append((round(desde, 2), round(hasta, 2), str(b["url"]).strip(), str(b.get("clip", ""))))
-
-    # Las frases clave no se superponen con un clip: la que estaba en pantalla se corta al entrar el clip,
-    # y la que empezaría durante el clip pasa a entrar cuando el clip termina.
+    # Ninguna frase clave queda debajo de un clip: la que sigue en pantalla se corta al entrar el clip,
+    # y la que entraría durante el clip pasa a entrar cuando el clip termina.
     for d, h, *_ in res:
         for x in bloques:
             if x["desde"] < d < x["hasta"]:
