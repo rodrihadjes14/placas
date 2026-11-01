@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es" data-composition-variables='[
+  {"id":"desde","type":"number","label":"Segundo en que arranca la lluvia (cuando suena la caja registradora)","default":0.3,"min":0,"max":60,"step":0.01},
+  {"id":"duracion","type":"number","label":"Duración total de la capa (s)","default":3.6,"min":1,"max":120,"step":0.1},
+  {"id":"cantidad","type":"number","label":"Cantidad de billetes","default":22,"min":4,"max":60},
+  {"id":"semilla","type":"number","label":"Semilla (cambia la caída de un Reel a otro)","default":80,"min":0,"max":100000},
+  {"id":"vista_previa","type":"boolean","label":"Vista previa con avatar de muestra","default":true}
+]'>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<title>Lluvia de billetes · Estudio Canaro</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+  /* Capa transparente de billetes que caen de arriba hacia abajo (desde el 01/11/2026). Se usa en los Reels de
+     caso real cuando aparece el monto cobrado, junto con la caja registradora. Va por encima del avatar y por
+     debajo del texto animado. Billetes: $20.000 y $10.000, frente y dorso (imágenes oficiales del BCRA). */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1920px; overflow:hidden; background:transparent; }
+  #root { position:relative; width:100%; height:100%; overflow:hidden; perspective:1400px; }
+  .billete { position:absolute; left:0; top:0; transform-style:preserve-3d; will-change:transform; }
+  .billete img { display:block; width:100%; height:auto; border-radius:3px;
+                 box-shadow:0 10px 22px rgba(0,0,0,.28), 0 2px 5px rgba(0,0,0,.2); }
+  .muestra { position:absolute; inset:0; background:linear-gradient(#3A3936,#24231F); }
+  .muestra .cabeza { position:absolute; left:440px; top:700px; width:200px; height:250px; border-radius:50%; background:#55534E; }
+  .muestra .cuerpo { position:absolute; left:290px; top:960px; width:500px; height:960px; border-radius:240px 240px 0 0; background:#55534E; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="billetes" data-start="0" data-width="1080" data-height="1920">
+  <div class="muestra" id="muestra"><div class="cabeza"></div><div class="cuerpo"></div></div>
+  <div id="capa"></div>
+</div>
+<script>
+  const v = window.__hyperframes.getVariables();
+  const desde = Math.max(0, Number(v.desde) || 0);
+  const cantidad = Math.max(4, Math.min(60, Math.round(Number(v.cantidad) || 22)));
+  let s = (Math.round(Number(v.semilla) || 1) * 2654435761) >>> 0;   // azar repetible: misma semilla, misma caída
+  const azar = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const entre = (a, b) => a + (b - a) * azar();
+  const IMAGENES = ["20000-frente", "20000-dorso", "10000-frente", "10000-dorso"];
+
+  const capa = document.getElementById("capa");
+  const tl = gsap.timeline({ paused: true });
+  let fin = desde;
+  // columnas en orden mezclado, para que la lluvia cubra todo el ancho desde el primer instante
+  const columnas = [];
+  while (columnas.length < cantidad) {
+    const tanda = [0, 1, 2, 3, 4, 5];
+    for (let k = tanda.length - 1; k > 0; k--) { const j = Math.floor(azar() * (k + 1)); [tanda[k], tanda[j]] = [tanda[j], tanda[k]]; }
+    columnas.push(...tanda);
+  }
+  for (let i = 0; i < cantidad; i++) {
+    const ancho = Math.round(entre(250, 400));
+    const el = document.createElement("div");
+    el.className = "billete";
+    el.style.width = ancho + "px";
+    el.innerHTML = '<img src="assets/billetes/' + IMAGENES[i % IMAGENES.length] + '.png" alt="">';
+    capa.appendChild(el);
+    // franjas horizontales repartidas para que cubran todo el ancho sin amontonarse
+    const x0 = columnas[i] * 190 - 140 + entre(-40, 40);
+    const inicio = desde + (i / cantidad) * 0.7 + entre(0, 0.08);
+    const caida = entre(1.2, 1.7);
+    const giro = entre(-220, 220);
+    const deriva = entre(-160, 160);
+    tl.set(el, { x: x0, y: -180 - entre(0, 80), rotation: entre(-40, 40), rotationX: entre(-30, 30), opacity: 1 }, 0);
+    tl.set(el, { opacity: 0 }, 0);
+    tl.set(el, { opacity: 1 }, inicio);
+    tl.to(el, { y: 1920 + 120, x: x0 + deriva, rotation: "+=" + giro, duration: caida, ease: "none" }, inicio);
+    // aleteo: el billete se da vuelta y se ladea mientras cae, como el papel
+    tl.to(el, { rotationX: "+=" + Math.round(entre(260, 540)), rotationY: entre(-35, 35), duration: caida, ease: "none" }, inicio);
+    fin = Math.max(fin, inicio + caida);
+  }
+  if (!v.vista_previa) document.getElementById("muestra").remove();
+  tl.set({}, {}, Math.max(Number(v.duracion) || 0, fin + 0.1));
+  window.__timelines["billetes"] = tl;
+</script>
+</body>
+</html>

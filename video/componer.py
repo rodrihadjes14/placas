@@ -32,6 +32,9 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
                Reels de caso real, click al aparecer cada bloque de texto y whoosh al entrar cada clip de b-roll
                y en los cortes con acercamiento. Las tomas están en video/sfx/ y se alternan entre Reels.
                false los apaga.
+    billetes   opcional, true por defecto: en los Reels de caso real (gancho con "$ monto") hace caer billetes de
+               $20.000 y $10.000 cuando aparece el monto, junto con la caja registradora (animado/billetes.html,
+               desde el 01/11/2026). false la apaga.
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
                el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
@@ -692,6 +695,20 @@ def renderizar_texto(variables, destino):
     return destino
 
 
+def renderizar_billetes(desde, semilla, destino):
+    """Capa transparente de billetes cayendo (animado/billetes.html) que arranca en "desde"."""
+    archivo = TRABAJO / "variables-billetes.json"
+    variables = {"desde": round(desde, 2), "duracion": round(desde + 2.6, 2), "cantidad": 22,
+                 "semilla": semilla, "vista_previa": False}
+    archivo.write_text(json.dumps(variables), encoding="utf-8")
+    print("Renderizando la lluvia de billetes desde el segundo", variables["desde"])
+    subprocess.run([
+        "npx", "--yes", HYPERFRAMES, "render", str(ANIMADO), "-c", "billetes.html", "--format", "mov",
+        "--variables-file", str(archivo), "-o", str(destino), "--quiet",
+    ], check=True)
+    return destino
+
+
 def componer_texto(datos, entrada, palabras, total):
     animado = datos.get("animado") or {}
     if isinstance(animado, str):
@@ -728,6 +745,17 @@ def componer_texto(datos, entrada, palabras, total):
             f"fade=t=out:st={hasta - BROLL_FUNDIDO:.2f}:d={BROLL_FUNDIDO}:alpha=1[b{k}]")
         filtros.append(f"[{fondo}][b{k}]overlay=0:0:enable='between(t,{desde:.2f},{hasta:.2f})':eof_action=pass[f{k}]")
         fondo = f"f{k}"
+    # Lluvia de billetes (desde el 01/11/2026): en los Reels de caso real, cuando aparece el gancho con el monto y suena
+    # la caja registradora. Va por encima del avatar y del b-roll, y por debajo del texto animado. "billetes": false la apaga.
+    if datos.get("billetes", True) and bloques and MONTO.search(str(bloques[0].get("grande", ""))):
+        try:
+            lluvia = renderizar_billetes(max(0.0, bloques[0]["desde"] + 0.15), semilla_sfx(datos), TRABAJO / "billetes.mov")
+            n = sum(1 for x in entradas if x == "-i")
+            entradas += ["-i", str(lluvia)]
+            filtros += [f"[{n}:v]format=yuva444p10le[lluvia]", f"[{fondo}][lluvia]overlay=0:0:eof_action=pass[fl]"]
+            fondo = "fl"
+        except Exception as e:                 # la lluvia nunca frena el video
+            print(f"Aviso: no se pudo armar la lluvia de billetes ({e})")
     filtros += ["[1:v]format=yuva444p10le[texto]", f"[{fondo}][texto]overlay=0:0:eof_action=repeat[v1]"]
     ultimo = "v1"
     if palabras:
