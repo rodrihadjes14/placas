@@ -725,6 +725,16 @@ def componer_texto(datos, entrada, palabras, total):
     except Exception as e:                     # un clip que no baja no frena el video
         print(f"Aviso: no se pudo descargar el b-roll ({e}); el video sale sin b-roll")
         broll, clips = [], []
+    # Un clip nunca se usa más tiempo del que dura (p. ej. B07, recortado a 3 s): así no se repite con un salto.
+    ajustados = []
+    for (d, h, u, c), archivo in zip(broll, clips):
+        h = min(h, round(d + duracion(archivo) - 0.05, 2))
+        if h - d >= BROLL_MIN:
+            ajustados.append(((d, h, u, c), archivo))
+        else:
+            print(f"Aviso: el b-roll {c!r} es muy corto para su lugar; no se usa")
+    broll = [x for x, _ in ajustados]
+    clips = [a for _, a in ajustados]
     abajo = int(cara["cabeza"] - MARGEN_TEXTO) if cara else ABAJO_DEFECTO
     variables = {"bloques": json.dumps(bloques, ensure_ascii=False), "abajo": abajo,
                  "duracion": round(total, 2), "vista_previa": False}
