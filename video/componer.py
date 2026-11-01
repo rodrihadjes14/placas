@@ -29,8 +29,9 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
                El texto animado y los subtítulos quedan por encima del clip.
     sfx        opcional, true por defecto: en el modo de texto animado mezcla efectos de sonido debajo de la voz
                (desde el 01/11/2026): caja registradora cuando aparece el gancho con el monto cobrado en los
-               Reels de caso real, pop al aparecer cada bloque de texto y whoosh al entrar cada clip de b-roll.
-               Los archivos están en video/sfx/ (alternativas en video/sfx/variantes/). false los apaga.
+               Reels de caso real, click al aparecer cada bloque de texto y whoosh al entrar cada clip de b-roll
+               y en los cortes con acercamiento. Las tomas están en video/sfx/ y se alternan entre Reels.
+               false los apaga.
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
                el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
@@ -369,12 +370,11 @@ DURACION_CLAVE = 4.5         # segundos máximos de cada bloque de frase clave
 BROLL_MAX = 4.5              # segundos máximos de cada clip de b-roll
 BROLL_MIN = 1.5              # un clip que quedaría más corto no se usa
 BROLL_FUNDIDO = 0.2
-# Efectos de sonido (desde el 01/11/2026): archivos en video/sfx/, generados con ElevenLabs y normalizados.
-# Las variantes alternativas quedan en video/sfx/variantes/ (para cambiar uno, copiar la variante encima).
+# Efectos de sonido (desde el 01/11/2026): tomas elegidas por el estudio en ElevenLabs (assets/sound-effects-canaro),
+# recortadas y normalizadas en video/sfx/ como <tipo>-<n>.mp3. sfx.json guarda la duración y el instante del pico
+# de cada toma. Para sumar una toma basta con agregar el archivo siguiente (p. ej. click-3.mp3) y su línea en sfx.json.
 SFX = AQUI / "sfx"
-SFX_VOLUMEN = {"whoosh": 0.35, "pop": 0.30, "caja": 0.55}   # relativo a la voz (1.0)
-SFX_ANTICIPO_WHOOSH = 0.18   # el whoosh arranca un poco antes del corte al b-roll, para que el pico caiga en el corte
-SFX_DEMORA_TEXTO = 0.12      # el pop suena cuando la línea chica termina de saltar
+SFX_VOLUMEN = {"whoosh": 0.40, "click": 0.35, "caja": 0.55}   # relativo a la voz (1.0)
 MONTO = re.compile(r"\$\s?\d")   # el gancho de un Reel de caso real trae el monto ("$ 18.000.000")
 BROLL_TEXTO_MIN = 1.8      # segundos que la frase clave de una oración se ve antes de que entre su clip
 
@@ -608,20 +608,64 @@ def elegir_portada(entrada, capa, desde, hasta):
     return elegido
 
 
-def eventos_sfx(bloques, broll):
-    """Arma la lista de efectos de sonido del Reel: [(segundo, archivo, volumen)].
-    Caja registradora cuando aparece el gancho con el monto cobrado (Reels de caso real), pop cuando aparece
-    cada uno de los demás bloques de texto y whoosh cuando entra cada clip de b-roll. Se desactiva con
-    "sfx": false en el payload."""
+def tomas_sfx():
+    """{tipo: [(archivo, instante del pico), ...]} con las tomas de video/sfx/ ordenadas."""
+    try:
+        meta = json.loads((SFX / "sfx.json").read_text(encoding="utf-8"))
+    except Exception:
+        meta = {}
+    res = {}
+    for f in sorted(SFX.glob("*-*.mp3"), key=lambda x: (x.stem.rsplit("-", 1)[0], int(x.stem.rsplit("-", 1)[1]))):
+        res.setdefault(f.stem.rsplit("-", 1)[0], []).append((f, float(meta.get(f.name, {}).get("pico", 0.0))))
+    return res
+
+
+def semilla_sfx(datos):
+    """Número que hace rotar las tomas de un Reel al siguiente: el de la fila (T80 → 80) o, si no hay, un hash."""
+    m = re.search(r"\d+", str(datos.get("id", "")))
+    return int(m.group()) if m else sum(map(ord, str(datos.get("video_id", ""))))
+
+
+def eventos_sfx(bloques, broll, cortes, semilla):
+    """Arma los efectos del Reel: [(segundo de inicio, archivo, volumen)]. Cada efecto se ubica para que su pico
+    caiga en el momento visual:
+      caja registradora  cuando aparece el gancho con el monto cobrado (Reels de caso real)
+      click              cuando aparece cada uno de los demás bloques de texto
+      whoosh             cuando entra cada clip de b-roll y en cada corte de escena con acercamiento (zoom in);
+                         los alejamientos no llevan sonido, ni un corte tapado por un clip de b-roll
+    Las tomas de cada tipo se alternan dentro del Reel y el punto de partida rota de un Reel a otro (semilla)."""
+    tomas = tomas_sfx()
+    usados = {}
+
+    def toma(tipo):
+        lista = tomas.get(tipo) or []
+        if not lista:
+            return None
+        k = usados.get(tipo, 0)
+        usados[tipo] = k + 1
+        return lista[(semilla + k) % len(lista)]
+
     eventos = []
+
+    def agregar(tipo, momento):
+        t = toma(tipo)
+        if t:
+            archivo, pico = t
+            eventos.append((round(max(0.0, momento - pico), 3), archivo, SFX_VOLUMEN[tipo]))
+
     for i, b in enumerate(bloques):
         if i == 0 and MONTO.search(str(b.get("grande", ""))):
-            eventos.append((b["desde"] + SFX_DEMORA_TEXTO + 0.1, SFX / "caja.mp3", SFX_VOLUMEN["caja"]))
+            agregar("caja", b["desde"] + 0.30)            # la banda amarilla del monto termina de abrirse
         else:
-            eventos.append((b["desde"] + SFX_DEMORA_TEXTO, SFX / "pop.mp3", SFX_VOLUMEN["pop"]))
-    for desde, *_ in broll:
-        eventos.append((max(0.0, desde - SFX_ANTICIPO_WHOOSH), SFX / "whoosh.mp3", SFX_VOLUMEN["whoosh"]))
-    return sorted((round(t, 2), f, v) for t, f, v in eventos if f.is_file())
+            agregar("click", b["desde"] + 0.12)           # la línea chica salta a su lugar
+    whooshes = [d for d, *_ in broll]
+    for i, c in enumerate(cortes):
+        tapado = any(d - 0.1 <= c <= h + 0.1 for d, h, *_ in broll)
+        if i % 2 == 0 and not tapado and all(abs(c - w) > 0.8 for w in whooshes):   # cortes pares: zoom in
+            whooshes.append(c)
+    for w in sorted(whooshes):
+        agregar("whoosh", w)
+    return sorted(eventos)
 
 
 def descargar_broll(ventanas):
@@ -693,7 +737,8 @@ def componer_texto(datos, entrada, palabras, total):
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
     audio = "0:a?"
-    efectos = eventos_sfx(bloques, broll) if datos.get("sfx", True) else []
+    efectos = (eventos_sfx(bloques, broll, datos.get("_cortes_reales") or [], semilla_sfx(datos))
+               if datos.get("sfx", True) else [])
     if efectos:
         base = sum(1 for x in entradas if x == "-i")   # índice de la primera entrada de efectos
         etiquetas = []
@@ -746,6 +791,7 @@ def componer(datos):
         cuadros, fps = detectar_cortes(entrada, esperados)
         if len(cuadros) == len(esperados):
             palabras = realinear_palabras(palabras, esperados, [c / fps for c in cuadros])
+            datos["_cortes_reales"] = [c / fps for c in cuadros]   # para el whoosh de los acercamientos
             print("Alternando encuadre en", len(cuadros) + 1, "escenas")
             entrada = alternar_encuadre(entrada, cuadros, detectar_cara(entrada), TRABAJO / "escenas.mp4")
             total = duracion(entrada)

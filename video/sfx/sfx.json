@@ -1,0 +1,30 @@
+{
+  "caja-1.mp3": {
+    "duracion": 1.55,
+    "pico": 0.167
+  },
+  "caja-2.mp3": {
+    "duracion": 1.16,
+    "pico": 0.079
+  },
+  "caja-3.mp3": {
+    "duracion": 1.43,
+    "pico": 0.161
+  },
+  "click-1.mp3": {
+    "duracion": 0.17,
+    "pico": 0.13
+  },
+  "click-2.mp3": {
+    "duracion": 0.165,
+    "pico": 0.021
+  },
+  "whoosh-1.mp3": {
+    "duracion": 0.255,
+    "pico": 0.193
+  },
+  "whoosh-2.mp3": {
+    "duracion": 0.285,
+    "pico": 0.209
+  }
+}
