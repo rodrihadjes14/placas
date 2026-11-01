@@ -27,6 +27,10 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
                con la voz sonando. Nunca en el gancho ni en las dos últimas oraciones, ni encima de un
                bloque de texto. El ancla solo decide el orden de los clips.
                El texto animado y los subtítulos quedan por encima del clip.
+    sfx        opcional, true por defecto: en el modo de texto animado mezcla efectos de sonido debajo de la voz
+               (desde el 01/11/2026): caja registradora cuando aparece el gancho con el monto cobrado en los
+               Reels de caso real, pop al aparecer cada bloque de texto y whoosh al entrar cada clip de b-roll.
+               Los archivos están en video/sfx/ (alternativas en video/sfx/variantes/). false los apaga.
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
                el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
@@ -365,6 +369,13 @@ DURACION_CLAVE = 4.5         # segundos máximos de cada bloque de frase clave
 BROLL_MAX = 4.5              # segundos máximos de cada clip de b-roll
 BROLL_MIN = 1.5              # un clip que quedaría más corto no se usa
 BROLL_FUNDIDO = 0.2
+# Efectos de sonido (desde el 01/11/2026): archivos en video/sfx/, generados con ElevenLabs y normalizados.
+# Las variantes alternativas quedan en video/sfx/variantes/ (para cambiar uno, copiar la variante encima).
+SFX = AQUI / "sfx"
+SFX_VOLUMEN = {"whoosh": 0.35, "pop": 0.30, "caja": 0.55}   # relativo a la voz (1.0)
+SFX_ANTICIPO_WHOOSH = 0.18   # el whoosh arranca un poco antes del corte al b-roll, para que el pico caiga en el corte
+SFX_DEMORA_TEXTO = 0.12      # el pop suena cuando la línea chica termina de saltar
+MONTO = re.compile(r"\$\s?\d")   # el gancho de un Reel de caso real trae el monto ("$ 18.000.000")
 BROLL_TEXTO_MIN = 1.8      # segundos que la frase clave de una oración se ve antes de que entre su clip
 
 
@@ -597,6 +608,22 @@ def elegir_portada(entrada, capa, desde, hasta):
     return elegido
 
 
+def eventos_sfx(bloques, broll):
+    """Arma la lista de efectos de sonido del Reel: [(segundo, archivo, volumen)].
+    Caja registradora cuando aparece el gancho con el monto cobrado (Reels de caso real), pop cuando aparece
+    cada uno de los demás bloques de texto y whoosh cuando entra cada clip de b-roll. Se desactiva con
+    "sfx": false en el payload."""
+    eventos = []
+    for i, b in enumerate(bloques):
+        if i == 0 and MONTO.search(str(b.get("grande", ""))):
+            eventos.append((b["desde"] + SFX_DEMORA_TEXTO + 0.1, SFX / "caja.mp3", SFX_VOLUMEN["caja"]))
+        else:
+            eventos.append((b["desde"] + SFX_DEMORA_TEXTO, SFX / "pop.mp3", SFX_VOLUMEN["pop"]))
+    for desde, *_ in broll:
+        eventos.append((max(0.0, desde - SFX_ANTICIPO_WHOOSH), SFX / "whoosh.mp3", SFX_VOLUMEN["whoosh"]))
+    return sorted((round(t, 2), f, v) for t, f, v in eventos if f.is_file())
+
+
 def descargar_broll(ventanas):
     archivos = []
     for i, (_, _, url, clip) in enumerate(ventanas):
@@ -665,12 +692,28 @@ def componer_texto(datos, entrada, palabras, total):
         fuentes = str(AQUI / "fuentes").replace(":", "\\:")
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
+    audio = "0:a?"
+    efectos = eventos_sfx(bloques, broll) if datos.get("sfx", True) else []
+    if efectos:
+        base = sum(1 for x in entradas if x == "-i")   # índice de la primera entrada de efectos
+        etiquetas = []
+        for k, (t, archivo, vol) in enumerate(efectos):
+            entradas += ["-i", str(archivo)]
+            ms = int(t * 1000)
+            filtros.append(f"[{base + k}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={vol},"
+                           f"adelay={ms}|{ms}[sfx{k}]")
+            etiquetas.append(f"[sfx{k}]")
+        filtros.append("[0:a]aformat=sample_rates=48000:channel_layouts=stereo[voz]")
+        filtros.append(f"[voz]{''.join(etiquetas)}amix=inputs={len(etiquetas) + 1}:duration=first:normalize=0,"
+                       "alimiter=limit=0.95[audio]")
+        audio = "[audio]"
+        print("Efectos de sonido:", [(t, a.stem) for t, a, _ in efectos])
     salida = TRABAJO / "final.mp4"
     print(f"Componiendo con texto animado: {len(bloques)} bloques, {len(broll)} clips de b-roll, "
           f"zona de texto hasta y={abajo}, subtítulos en y={sub_y}")
     subprocess.run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *entradas,
-        "-filter_complex", ";".join(filtros), "-map", f"[{ultimo}]", "-map", "0:a?",
+        "-filter_complex", ";".join(filtros), "-map", f"[{ultimo}]", "-map", audio,
         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{total:.2f}", str(salida),
     ], check=True)
