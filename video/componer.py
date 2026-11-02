@@ -132,6 +132,37 @@ def limpiar(t):
     return str(t).replace("{", "").replace("}", "").replace("\\", "")
 
 
+VISIBLE_FIJO = {"uatsap": "WhatsApp", "guatsap": "WhatsApp", "guasap": "WhatsApp", "denei": "DNI"}
+SIN_TILDE = str.maketrans("áéíóú", "aeiou")
+
+
+def palabras_para_subtitulos(palabras):
+    """Desde el 02/11/2026: el GUION_TTS escribe algunas palabras como se pronuncian ("á erreté", "uatsáp",
+    "deneí", "guardálo"). En los subtítulos se muestran escritas como corresponde (ART, WhatsApp, DNI,
+    guardalo), con los tiempos de la voz."""
+    res, i = [], 0
+    while i < len(palabras):
+        p = dict(palabras[i])
+        w = str(p["w"])
+        punta = re.search(r"[.,;:?!…]*$", w).group(0)
+        base = w[:len(w) - len(punta)] if punta else w
+        n = normalizar(base)
+        if n == "a" and i + 1 < len(palabras) and normalizar(palabras[i + 1]["w"]) == "errete":
+            sig = str(palabras[i + 1]["w"])
+            p["w"] = "ART" + re.search(r"[.,;:?!…]*$", sig).group(0)
+            p["e"] = palabras[i + 1]["e"]
+            res.append(p)
+            i += 2
+            continue
+        if n in VISIBLE_FIJO:
+            p["w"] = VISIBLE_FIJO[n] + punta
+        elif re.fullmatch(r"¿?[a-zñ]{3,}[áéí](lo|la|los|las|nos|me|te|le|les)", base.lower()):
+            p["w"] = base.translate(SIN_TILDE) + punta   # voseo con tilde de pronunciación: guardálo -> guardalo
+        res.append(p)
+        i += 1
+    return res
+
+
 def escribir_ass(palabras, destino, pos_y=POS_Y_DEFECTO):
     cab = f"""[Script Info]
 ScriptType: v4.00+
@@ -806,7 +837,7 @@ def componer_texto(datos, entrada, palabras, total):
     ultimo = "v1"
     if palabras:
         ass = TRABAJO / "subtitulos.ass"
-        escribir_ass(palabras, ass, sub_y)
+        escribir_ass(palabras_para_subtitulos(palabras), ass, sub_y)
         fuentes = str(AQUI / "fuentes").replace(":", "\\:")
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
@@ -898,7 +929,7 @@ def componer(datos):
 
     if palabras:
         ass = TRABAJO / "subtitulos.ass"
-        escribir_ass(palabras, ass, sub_y)
+        escribir_ass(palabras_para_subtitulos(palabras), ass, sub_y)
         fuentes = str(AQUI / "fuentes").replace(":", "\\:")
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
