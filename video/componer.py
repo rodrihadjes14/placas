@@ -485,7 +485,8 @@ def ventanas_broll(animado, palabras, bloques, total):
     antes de las dos últimas oraciones). Si la oración tiene frase clave, el clip entra cuando la frase ya
     estuvo BROLL_TEXTO_MIN segundos en pantalla, así el texto nunca se corre de su oración. Entre las
     oraciones posibles se eligen las que reparten los clips de forma más pareja en el tiempo, evitando dos
-    oraciones seguidas. El ancla de cada clip solo decide el orden en que se usan. Un clip puede tapar un
+    oraciones seguidas. Desde el 02/11/2026, si las anclas de la tarea apuntan a oraciones válidas, el clip
+    va en la oración de su ancla (ver elegir_broll_por_ancla) y este reparto queda como respaldo. Un clip puede tapar un
     corte de escena de HeyGen: el salto queda disimulado igual que con el zoom."""
     from itertools import combinations
     items = [b for b in (animado.get("broll") or []) if isinstance(b, dict) and str(b.get("url", "")).strip()][:2]
@@ -494,6 +495,14 @@ def ventanas_broll(animado, palabras, bloques, total):
     inicios = inicios_de_oracion(palabras)
     t_gancho = fin_del_gancho(palabras)
     arranques = [float(p["s"]) for p in palabras]
+
+    # Desde el 02/11/2026: si cada clip trae un ancla que cae al comienzo de una oración del desarrollo
+    # (ni el gancho ni la última), el clip va en esa oración, que es la que eligió la tarea de contenidos
+    # por lo que se dice en ella. Si algún ancla no se encuentra o no tiene lugar, se usa el reparto automático.
+    elegidos_por_ancla = elegir_broll_por_ancla(items, palabras, inicios, arranques, bloques, t_gancho, total)
+    if elegidos_por_ancla:
+        return ajustar_bloques_broll(elegidos_por_ancla, bloques)
+
     limites = [inicios[-2] - 0.1 if len(inicios) >= 3 else total - 3.5]   # antes de la afirmación del estudio
     if len(inicios) >= 2:
         limites.append(inicios[-1] - 0.1)      # Reel corto: si no hay lugar, el desarrollo llega a la última oración
@@ -520,7 +529,34 @@ def ventanas_broll(animado, palabras, bloques, total):
         return t if t is not None else float("inf")
     items = sorted(items, key=orden)[:n]
     res = [(d, h, str(b["url"]).strip(), str(b.get("clip", ""))) for (d, h, _), b in zip(elegidos, items)]
+    return ajustar_bloques_broll(res, bloques)
 
+
+def elegir_broll_por_ancla(items, palabras, inicios, arranques, bloques, t_gancho, total):
+    """Ubica cada clip en la oración donde empieza su ancla. Devuelve [(desde, hasta, url, clip)] o None si
+    alguna ancla no se encuentra, cae en el gancho o en la última oración, dos clips piden la misma oración,
+    o la oración no deja lugar para el clip."""
+    if len(inicios) < 3:
+        return None
+    limite = inicios[-1] - 0.1
+    candidatos = {i: (d, h) for d, h, i in candidatos_broll(inicios, arranques, bloques, t_gancho, limite, total)}
+    res, usadas = [], set()
+    for b in items:
+        t = ubicar_ancla(str(b.get("ancla", "")), palabras)
+        if t is None:
+            return None
+        idx = min(range(len(inicios)), key=lambda k: abs(inicios[k] - t))
+        if abs(inicios[idx] - t) > 0.05 or idx == 0 or idx >= len(inicios) - 1 or idx in usadas or idx not in candidatos:
+            return None
+        usadas.add(idx)
+        d, h = candidatos[idx]
+        res.append((d, h, str(b["url"]).strip(), str(b.get("clip", ""))))
+    print("B-roll ubicado según las anclas de la tarea:", [(c, d) for d, _, _, c in res])
+    return sorted(res)
+
+
+def ajustar_bloques_broll(res, bloques):
+    """Corre los bloques de texto para que ninguno quede debajo de un clip de b-roll."""
     # Ninguna frase clave queda debajo de un clip: la que sigue en pantalla se corta al entrar el clip,
     # y la que entraría durante el clip pasa a entrar cuando el clip termina.
     for d, h, *_ in res:
