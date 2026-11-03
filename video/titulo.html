@@ -19,17 +19,17 @@
            box-shadow:0 10px 28px rgba(0,0,0,.35); }
   /* Pie con el tipo de caso y "ART" (desde el 03/11/2026): fondo blanco y letras negras, debajo del gancho */
   .pie { display:inline-block; background:#FFFFFF; color:var(--carbon); border-radius:6px; padding:10px 24px 12px;
-         margin-top:14px; font-size:.6em; line-height:1.05; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+         margin-top:14px; font-size:52px; line-height:1.05; box-shadow:0 8px 24px rgba(0,0,0,.3); }
 </style>
 </head>
 <body>
 <div id="titulo"></div>
 <script>
   // window.TITULO = {texto, tam, arriba, pie} lo pone broll.py antes de cargar la página.
-  const d = window.TITULO || { texto: "Cobró $ 28.000.000 por un corte en la cara", tam: 92, arriba: 250 };
+  const d = window.TITULO || { texto: "Cobró $ 28.000.000 por un corte en la cara", tam: 78, arriba: 250 };
   const caja = document.getElementById("titulo");
   caja.style.setProperty("--arriba", (d.arriba || 250) + "px");
-  caja.style.fontSize = (d.tam || 92) + "px";
+  caja.style.fontSize = (d.tam || 78) + "px";
   const ANCHO = 960 - 48;
   const medidor = document.createElement("span");
   medidor.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;";

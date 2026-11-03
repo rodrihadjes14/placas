@@ -12,7 +12,7 @@
 <script src="assets/gsap.min.js"></script>
 <style>
   /* Capa de texto del Reel con el avatar a pantalla completa (desde el 30/10/2026).
-     Cada bloque: línea chica en mayúscula a 52 px (fondo blanco, letras negras; desde el 31/10/2026) y línea grande en mayúscula
+     Cada bloque: línea chica en mayúscula a 52 px (fondo blanco, letras negras; desde el 31/10/2026) y línea grande en mayúscula a 74 px
      sobre banda amarilla. Van arriba de la cabeza del avatar, entre el encabezado de Reels (≈210 px)
      y "abajo". Con vista_previa=false el fondo queda transparente y se exporta en MOV con alfa. */
   @font-face { font-family: "Bricolage"; src: url("assets/fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
@@ -28,7 +28,7 @@
   /* Pie del gancho de los Reels de caso real (desde el 03/11/2026): tipo de caso y "ART" debajo de la línea grande,
      con el mismo estilo de la línea chica (fondo blanco, letras negras) para que contraste con el amarillo. */
   .chica.pie { margin-bottom:0; margin-top:14px; }
-  .grande { font-size:86px; line-height:1.12; font-weight:800; letter-spacing:0; text-transform:uppercase; }
+  .grande { font-size:74px; line-height:1.12; font-weight:800; letter-spacing:0; text-transform:uppercase; }
   .renglon { display:block; }
   .banda { position:relative; display:inline-block; padding:4px 20px 8px; margin:3px 0; }
   .banda .fondo { position:absolute; inset:0; background:var(--amarillo); border-radius:6px; transform-origin:0 50%; box-shadow:0 8px 24px rgba(0,0,0,.18); }
@@ -91,7 +91,7 @@
     // Achica la letra hasta que el bloque entre entre el encabezado y la cabeza (o hasta el 60 %)
     let esc1 = 1, alto = 0;
     for (; esc1 >= 0.6; esc1 -= 0.05) {
-      const tam = Math.round(86 * esc1);
+      const tam = Math.round(74 * esc1);   // línea grande a 74 px (antes 86; achicada el 03/11/2026)
       const filas = renglones(b.grande, tam);
       const tamChica = Math.round(52 * Math.max(esc1, 0.8));
       el.innerHTML = (b.chica ? '<div class="chica" style="font-size:' + tamChica + 'px">' + esc(b.chica) + '</div>' : "") +
