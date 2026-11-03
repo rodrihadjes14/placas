@@ -17,12 +17,15 @@
             font-weight:800; text-transform:uppercase; line-height:1.1; }
   .banda { display:inline-block; background:var(--amarillo); border-radius:8px; padding:6px 24px 12px; margin:4px 0;
            box-shadow:0 10px 28px rgba(0,0,0,.35); }
+  /* Pie con el tipo de caso y "ART" (desde el 03/11/2026): fondo blanco y letras negras, debajo del gancho */
+  .pie { display:inline-block; background:#FFFFFF; color:var(--carbon); border-radius:6px; padding:10px 24px 12px;
+         margin-top:14px; font-size:.6em; line-height:1.05; box-shadow:0 8px 24px rgba(0,0,0,.3); }
 </style>
 </head>
 <body>
 <div id="titulo"></div>
 <script>
-  // window.TITULO = {texto, tam, arriba} lo pone broll.py antes de cargar la página.
+  // window.TITULO = {texto, tam, arriba, pie} lo pone broll.py antes de cargar la página.
   const d = window.TITULO || { texto: "Cobró $ 28.000.000 por un corte en la cara", tam: 92, arriba: 250 };
   const caja = document.getElementById("titulo");
   caja.style.setProperty("--arriba", (d.arriba || 250) + "px");
@@ -32,7 +35,7 @@
   medidor.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;";
   caja.appendChild(medidor);
   // Parte el texto en renglones que entren en el ancho, sin cortar el monto ("$ 28.000.000").
-  const palabras = String(d.texto || "").replace(/\$\s+/g, "$ ").split(/\s+/).filter(Boolean);
+  const palabras = String(d.texto || "").replace(/\$\s+/g, "$ ").split(/[ \t\n]+/).filter(Boolean);   // \s también corta el espacio duro: así "$" queda pegado al número
   const renglones = [];
   let actual = "";
   for (const p of palabras) {
@@ -48,6 +51,12 @@
     b.className = "banda";
     b.textContent = r;
     caja.appendChild(b);
+  }
+  if (d.pie) {
+    const pie = document.createElement("span");
+    pie.className = "pie";
+    pie.textContent = d.pie;
+    caja.appendChild(pie);
   }
   window.LISTO = true;
 </script>

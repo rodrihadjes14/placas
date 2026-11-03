@@ -25,6 +25,9 @@
   .chica { display:inline-block; max-width:940px; background:var(--blanco); color:var(--carbon); font-size:52px; line-height:1.05; font-weight:800;
            letter-spacing:0; text-transform:uppercase; padding:12px 24px 14px; border-radius:6px; margin-bottom:14px;
            box-shadow:0 6px 20px rgba(0,0,0,.18); }
+  /* Pie del gancho de los Reels de caso real (desde el 03/11/2026): tipo de caso y "ART" debajo de la línea grande,
+     con el mismo estilo de la línea chica (fondo blanco, letras negras) para que contraste con el amarillo. */
+  .chica.pie { margin-bottom:0; margin-top:14px; }
   .grande { font-size:86px; line-height:1.12; font-weight:800; letter-spacing:0; text-transform:uppercase; }
   .renglon { display:block; }
   .banda { position:relative; display:inline-block; padding:4px 20px 8px; margin:3px 0; }
@@ -90,9 +93,11 @@
     for (; esc1 >= 0.6; esc1 -= 0.05) {
       const tam = Math.round(86 * esc1);
       const filas = renglones(b.grande, tam);
-      el.innerHTML = (b.chica ? '<div class="chica" style="font-size:' + Math.round(52 * Math.max(esc1, 0.8)) + 'px">' + esc(b.chica) + '</div>' : "") +
+      const tamChica = Math.round(52 * Math.max(esc1, 0.8));
+      el.innerHTML = (b.chica ? '<div class="chica" style="font-size:' + tamChica + 'px">' + esc(b.chica) + '</div>' : "") +
         '<div class="grande" style="font-size:' + tam + 'px">' + filas.map((f) =>
-          '<span class="renglon"><span class="banda"><i class="fondo"></i>' + f.map((w) => '<span class="w">' + esc(w) + '</span>').join("") + '</span></span>').join("") + '</div>';
+          '<span class="renglon"><span class="banda"><i class="fondo"></i>' + f.map((w) => '<span class="w">' + esc(w) + '</span>').join("") + '</span></span>').join("") + '</div>' +
+        (b.pie ? '<div class="chica pie" style="font-size:' + tamChica + 'px">' + esc(b.pie) + '</div>' : "");
       alto = el.offsetHeight;
       if (alto <= abajo - ARRIBA) break;
     }
@@ -100,13 +105,17 @@
 
     const desde = Math.max(0, Number(b.desde) || 0);
     const hasta = Math.max(desde + 1.2, Number(b.hasta) || desde + 3);
-    const chica = el.querySelector(".chica");
+    const chica = el.querySelector(".chica:not(.pie)");
+    const pie = el.querySelector(".chica.pie");
     const fondos = el.querySelectorAll(".banda .fondo");
     const palabras = el.querySelectorAll(".banda .w");
     tl.set(el, { opacity: 1 }, desde);
     if (chica) tl.fromTo(chica, { opacity: 0, y: 24, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: "back.out(2)" }, desde);
     tl.fromTo(fondos, { scaleX: 0 }, { scaleX: 1, duration: 0.35, stagger: 0.08, ease: "power2.out" }, desde + 0.12);
     tl.fromTo(palabras, { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.32, stagger: 0.05, ease: E }, desde + 0.22);
+    // el pie entra cuando termina de escribirse la línea grande
+    if (pie) tl.fromTo(pie, { opacity: 0, y: -16, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: "back.out(2)" },
+                       desde + 0.22 + 0.05 * palabras.length + 0.1);
     // Salida: sube apenas y se desvanece (el último bloque se queda hasta el final)
     if (i < bloques.length - 1 || hasta < (Number(v.duracion) || 0) - 0.2) {
       tl.to(el, { opacity: 0, y: -26, duration: 0.25, ease: "power2.in" }, hasta - 0.25);

@@ -13,11 +13,13 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
                perfil" durante la última oración del video (la llamada a la acción).
     animado    opcional: textos animados del Reel (columna ANIMADO). Si viene, el avatar queda a
                pantalla completa y arriba de la cabeza aparecen bloques de texto animado (animado/texto.html):
-               {"gancho": {"chica", "grande"}, "claves": [{"chica", "grande", "ancla"}, ...],
+               {"gancho": {"chica", "grande"[, "pie"]}, "claves": [{"chica", "grande", "ancla"}, ...],
                 "cta": {"chica", "grande"}}. El gancho se ve mientras se lo dice, cada frase clave entra
                con su ancla (primeras palabras de la oración del guion) o con la oración siguiente, y el
                CTA desde la última oración hasta el final. Los subtítulos karaoke quedan a la altura del
                pecho todo el video. En ese modo no se usan las placas ni la placa de contacto.
+               Desde el 03/11/2026 el gancho de los Reels de caso real trae "pie": el tipo de caso y "ART"
+               ("ACCIDENTE DE TRABAJO - ART"), que se ve debajo de la línea grande en blanco con letras negras.
                (Hasta el 30/10/2026 este modo armaba la pantalla dividida con animado/reel.html.)
                Desde el 31/10/2026 "animado" puede traer además "broll": hasta dos clips de la pestaña
                BRoll de la planilla, [{"ancla": "primeras palabras de la oración", "clip": "B07",
@@ -439,8 +441,11 @@ def textos_de_bloques(animado):
     (gancho / claves / cta) y, por compatibilidad, el viejo de la pantalla dividida."""
     def bloque(x):
         if isinstance(x, dict) and str(x.get("grande", "")).strip():
-            return {"chica": str(x.get("chica", "")).strip(), "grande": str(x["grande"]).strip(),
-                    "ancla": str(x.get("ancla", "")).strip()}
+            res = {"chica": str(x.get("chica", "")).strip(), "grande": str(x["grande"]).strip(),
+                   "ancla": str(x.get("ancla", "")).strip()}
+            if str(x.get("pie", "")).strip():          # tipo de caso + ART debajo del gancho (desde el 03/11/2026)
+                res["pie"] = str(x["pie"]).strip()
+            return res
         return None
     gancho = bloque(animado.get("gancho"))
     claves = [b for b in (bloque(x) for x in (animado.get("claves") or [])) if b]

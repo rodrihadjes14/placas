@@ -7,7 +7,8 @@ Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento) co
     id         ID de la fila en la pestaña Aprobación (FORMATO TikTok)
     audio_url  dirección del audio de ElevenLabs (o un archivo local, para pruebas)
     tiempos    palabras con sus tiempos: [{"w": "Cobró", "s": 0.0, "e": 0.38}, ...]
-    animado    columna ANIMADO de la fila: {"gancho": {"grande": "Cobró $ 28.000.000 por un corte en la cara"},
+    animado    columna ANIMADO de la fila: {"gancho": {"grande": "Cobró $ 28.000.000 por un corte en la cara",
+               "pie": "ACCIDENTE IN ITINERE - ART"},   (pie desde el 03/11/2026: tipo de caso y ART, en blanco)
                "broll": [{"ancla": "primeras palabras de la oración", "clip": "B08", "url": "https://..."}, ...]}
                Un clip por oración, en el orden del guion. Cada clip cubre desde su oración hasta que empieza el
                siguiente; el primero arranca en el segundo 0. Los tramos largos se parten en tomas de hasta
@@ -122,13 +123,13 @@ def armar_toma(i, toma):
     return destino
 
 
-def renderizar_titulo(texto, destino):
+def renderizar_titulo(texto, destino, pie=""):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         nav = pw.chromium.launch()
         pag = nav.new_page(viewport={"width": 1080, "height": 1920})
         pag.add_init_script("window.TITULO = " + json.dumps(
-            {"texto": texto, "tam": TITULO_TAM, "arriba": TITULO_ARRIBA}, ensure_ascii=False) + ";")
+            {"texto": texto, "tam": TITULO_TAM, "arriba": TITULO_ARRIBA, "pie": pie}, ensure_ascii=False) + ";")
         pag.goto((AQUI / "titulo.html").as_uri())
         pag.evaluate("document.fonts.ready")
         pag.wait_for_function("window.LISTO === true")
@@ -217,7 +218,8 @@ def componer_broll(datos):
         except Exception as e:            # la lluvia nunca frena el video
             print(f"Aviso: no se pudo armar la lluvia de billetes ({e})")
     if titulo:
-        png = renderizar_titulo(titulo, TRABAJO / "titulo.png")
+        pie = str((animado.get("gancho") or {}).get("pie", "") or "").strip()
+        png = renderizar_titulo(titulo, TRABAJO / "titulo.png", pie)
         entradas += ["-loop", "1", "-i", str(png)]
         n = sum(1 for x in entradas if x == "-i") - 1
         filtros.append(f"[{ultimo}][{n}:v]overlay=0:0:shortest=1[vt]")
