@@ -1,0 +1,61 @@
+name: Componer TikTok solo con b-roll
+
+# Lo dispara TikTokBroll.gs (Apps Script) cuando ElevenLabs terminó el audio de una fila con FORMATO TikTok.
+# Arma el video con video/broll.py (b-roll + voz + subtítulos en mayúscula + título fijo) y lo sube a Cloudinary
+# como final-<ID>-broll-<SELLO>.mp4, con la tapa como final-<ID>-broll-<SELLO>-portada.jpg.
+on:
+  repository_dispatch:
+    types: [componer-broll]
+
+concurrency:
+  group: broll-${{ github.event.client_payload.id }}
+  cancel-in-progress: false
+
+jobs:
+  componer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: video
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar herramientas
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          pip install -q playwright "opencv-python-headless<5" "mediapipe==0.10.32"
+          python -m playwright install --with-deps chromium
+          npx --yes hyperframes@0.8.173 browser ensure
+
+      - name: Componer
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          CARPETA_TRABAJO: ${{ runner.temp }}/trabajo
+        run: python broll.py
+
+      - name: Subir a Cloudinary
+        env:
+          FILA: ${{ github.event.client_payload.id }}
+          SELLO: ${{ github.event.client_payload.sello }}
+        run: |
+          curl -sS --fail-with-body \
+            -F "file=@${{ runner.temp }}/trabajo/portada.jpg" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=final-${FILA}-broll-${SELLO}-portada" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/image/upload || echo "Aviso: no se pudo subir la portada"
+          # El video va último: TikTokBroll.gs lo toma como señal de que todo terminó.
+          curl -sS --fail-with-body \
+            -F "file=@${{ runner.temp }}/trabajo/final.mp4" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=final-${FILA}-broll-${SELLO}" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/video/upload
