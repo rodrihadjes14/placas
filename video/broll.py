@@ -219,6 +219,9 @@ def componer_broll(datos):
             print(f"Aviso: no se pudo armar la lluvia de billetes ({e})")
     if titulo:
         pie = str((animado.get("gancho") or {}).get("pie", "") or "").strip()
+        if not pie and c.MONTO.search(titulo):      # red de seguridad (05/11/2026): todo Reel de caso lleva pie
+            pie = c.pie_por_defecto(palabras)
+            print("Aviso: el gancho de caso no traía pie; se usa", pie)
         png = renderizar_titulo(titulo, TRABAJO / "titulo.png", pie)
         entradas += ["-loop", "1", "-i", str(png)]
         n = sum(1 for x in entradas if x == "-i") - 1

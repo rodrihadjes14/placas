@@ -436,6 +436,18 @@ def _sin_asteriscos(t):
     return re.sub(r"\*", "", str(t or "")).strip()
 
 
+def pie_por_defecto(palabras):
+    """Red de seguridad (05/11/2026): si un Reel de caso real (gancho con "$ monto") llega sin "pie", lo deduce
+    del guion dicho: in itinere, enfermedad profesional o, por defecto, accidente de trabajo. Siempre con " - ART"."""
+    texto = " ".join(str(p.get("w", "")) for p in (palabras or [])).lower()
+    texto = texto.replace("í", "i").replace("é", "e")
+    if re.search(r"itinere|yendo (a|al) (trabajar|trabajo)|volviendo (del|de) (trabajar|trabajo)|trayecto", texto):
+        return "ACCIDENTE IN ITINERE - ART"
+    if "enfermedad" in texto or "enfermo" in texto:
+        return "ENFERMEDAD PROFESIONAL - ART"
+    return "ACCIDENTE DE TRABAJO - ART"
+
+
 def textos_de_bloques(animado):
     """Devuelve (gancho, claves, cta) como dicts {chica, grande[, ancla]}. Acepta el formato nuevo
     (gancho / claves / cta) y, por compatibilidad, el viejo de la pantalla dividida."""
@@ -788,6 +800,9 @@ def componer_texto(datos, entrada, palabras, total):
     cara = detectar_cara(entrada)
     print("Cara detectada:", cara if cara else "no (se usan posiciones por defecto)")
     gancho, claves, cta = textos_de_bloques(animado)
+    if gancho and MONTO.search(gancho.get("grande", "")) and not gancho.get("pie"):
+        gancho["pie"] = pie_por_defecto(palabras)
+        print("Aviso: el gancho de caso no traía pie; se usa", gancho["pie"])
     bloques = tiempos_de_bloques(gancho, claves, cta, palabras, total)
     broll = ventanas_broll(animado, palabras, bloques, total)
     if broll:
