@@ -95,8 +95,16 @@ jobs:
           git config user.email "historias-bot@users.noreply.github.com"
           git add "${{ steps.datos.outputs.archivo }}"
           git commit -m "historia ${{ steps.datos.outputs.id }}"
-          git pull --rebase -q origin main
-          git push -q origin HEAD:main
+          # Hasta 3 intentos: si GitHub falla un momento (ej. "Internal Server Error"), espera y reintenta.
+          for intento in 1 2 3; do
+            if git pull --rebase -q origin main && git push -q origin HEAD:main; then
+              exit 0
+            fi
+            echo "La subida falló (intento $intento de 3)."
+            if [ "$intento" -lt 3 ]; then sleep 20; fi
+          done
+          echo "No se pudo subir la placa después de 3 intentos."
+          exit 1
 
       - name: Publicar en Instagram y Facebook
         id: publicar
@@ -115,8 +123,20 @@ jobs:
         run: |
           git add "historias/${{ steps.datos.outputs.id }}/estado.json"
           git commit -m "estado historia ${{ steps.datos.outputs.id }}" || true
-          git pull --rebase -q origin main
-          git push -q origin HEAD:main
+          # Hasta 3 intentos, igual que en "Subir la placa".
+          subido=false
+          for intento in 1 2 3; do
+            if git pull --rebase -q origin main && git push -q origin HEAD:main; then
+              subido=true
+              break
+            fi
+            echo "La subida del estado falló (intento $intento de 3)."
+            if [ "$intento" -lt 3 ]; then sleep 20; fi
+          done
+          if [ "$subido" != "true" ]; then
+            echo "No se pudo subir estado.json después de 3 intentos."
+            exit 1
+          fi
           if [ "${{ steps.publicar.outcome }}" != "success" ]; then
             echo "La historia no se pudo publicar en todas las redes: revisá historias/${{ steps.datos.outputs.id }}/estado.json"
             exit 1
