@@ -134,14 +134,15 @@ def limpiar(t):
     return str(t).replace("{", "").replace("}", "").replace("\\", "")
 
 
-VISIBLE_FIJO = {"uatsap": "WhatsApp", "guatsap": "WhatsApp", "guasap": "WhatsApp", "denei": "DNI"}
+VISIBLE_FIJO = {"aerrete": "ART", "uatsap": "WhatsApp", "guatsap": "WhatsApp", "guasap": "WhatsApp", "denei": "DNI"}
 SIN_TILDE = str.maketrans("áéíóú", "aeiou")
 
 
 def palabras_para_subtitulos(palabras):
-    """Desde el 02/11/2026: el GUION_TTS escribe algunas palabras como se pronuncian ("á erreté", "uatsáp",
+    """Desde el 02/11/2026: el GUION_TTS escribe algunas palabras como se pronuncian ("áerreté", "uatsáp",
     "deneí", "guardálo"). En los subtítulos se muestran escritas como corresponde (ART, WhatsApp, DNI,
-    guardalo), con los tiempos de la voz."""
+    guardalo), con los tiempos de la voz. Desde el 07/11/2026 la ART va "áerreté", todo junto (separada,
+    la voz cortaba la sigla en dos); se sigue aceptando el "á erreté" separado de los guiones anteriores."""
     res, i = [], 0
     while i < len(palabras):
         p = dict(palabras[i])
@@ -149,7 +150,7 @@ def palabras_para_subtitulos(palabras):
         punta = re.search(r"[.,;:?!…]*$", w).group(0)
         base = w[:len(w) - len(punta)] if punta else w
         n = normalizar(base)
-        if n == "a" and i + 1 < len(palabras) and normalizar(palabras[i + 1]["w"]) == "errete":
+        if n == "a" and i + 1 < len(palabras) and normalizar(palabras[i + 1]["w"]) == "errete":   # formato viejo, separado
             sig = str(palabras[i + 1]["w"])
             p["w"] = "ART" + re.search(r"[.,;:?!…]*$", sig).group(0)
             p["e"] = palabras[i + 1]["e"]
