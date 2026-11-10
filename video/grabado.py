@@ -153,21 +153,49 @@ def tramos_de_corte(ubic, pal, sil, total):
     return tramos
 
 
-def cortar(origen, tramos, destino):
-    """Une los tramos (cuadros enteros). Devuelve [(desde, hasta, oración)] en el tiempo del video cortado."""
-    salida, t, partes = [], 0.0, []
-    for a, b, k in tramos:
+def cortar(origen, tramos, destino, audio):
+    """Une los tramos (cuadros enteros): deja el video sin sonido en destino y la voz en audio (WAV).
+    Devuelve [(desde, hasta, oración)] en el tiempo del video cortado.
+    Cada tramo se extrae por separado y después se pegan: así el resultado no depende de las marcas de tiempo
+    (el 10/11/2026 un corte hecho con filtros de selección salió sin cortar en GitHub y nadie lo notó)."""
+    import wave
+    carpeta = pathlib.Path(destino).parent / "tramos"
+    carpeta.mkdir(exist_ok=True)
+    salida, t, lista, muestras = [], 0.0, [], []
+    for i, (a, b, k) in enumerate(tramos):
         n = max(1, round((b - a) * FPS))
         a = round(a * FPS) / FPS
-        b = a + n / FPS
-        partes.append(f"between(t,{a:.4f},{b - 0.5 / FPS:.4f})")
+        v, w = carpeta / f"{i:03d}.mp4", carpeta / f"{i:03d}.wav"
+        correr("ffmpeg", "-v", "error", "-y", "-ss", f"{a:.4f}", "-i", origen, "-frames:v", n, "-an", "-r", FPS,
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", 15, "-pix_fmt", "yuv420p", v)
+        correr("ffmpeg", "-v", "error", "-y", "-ss", f"{a:.4f}", "-i", origen, "-t", f"{n / FPS + 0.2:.4f}", "-vn",
+               "-ac", 2, "-ar", 48000, "-c:a", "pcm_s16le", w)
+        with wave.open(str(w)) as f:
+            datos = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16).reshape(-1, 2)
+        largo = round(n / FPS * 48000)
+        datos = np.vstack([datos, np.zeros((max(0, largo - len(datos)), 2), np.int16)])[:largo].copy()
+        borde = min(960, largo // 4)                      # 20 ms de entrada y salida suaves, para que no haga clic
+        rampa = np.linspace(0, 1, borde)[:, None]
+        datos[:borde] = (datos[:borde] * rampa).astype(np.int16)
+        datos[-borde:] = (datos[-borde:] * rampa[::-1]).astype(np.int16)
+        muestras.append(datos)
+        lista.append(f"file '{v}'")
         salida.append((t, t + n / FPS, k))
         t += n / FPS
-    sel = "+".join(partes)
-    correr("ffmpeg", "-v", "error", "-y", "-i", origen, "-vf", f"select='{sel}',setpts=N/{FPS}/TB",
-           "-af", f"aselect='{sel}',asetpts=N/SR/TB", "-r", FPS,
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", 15, "-c:a", "aac", "-b:a", "192k", destino)
+    (carpeta / "lista.txt").write_text("\n".join(lista) + "\n", encoding="utf-8")
+    correr("ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", 0, "-i", carpeta / "lista.txt", "-c", "copy", destino)
+    with wave.open(str(audio), "wb") as f:
+        f.setnchannels(2)
+        f.setsampwidth(2)
+        f.setframerate(48000)
+        f.writeframes(np.vstack(muestras).tobytes())
     return salida
+
+
+def duracion_de(archivo):
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(archivo)],
+                       capture_output=True, text=True).stdout.strip()
+    return float(r or 0)
 
 
 def palabras_del_guion(orac, pal, lapsos):
@@ -514,10 +542,13 @@ def componer(datos):
     pal = transcribir(TRABAJO / "src.wav")
     ubic = ubicar_oraciones(orac, pal)
     tramos = tramos_de_corte(ubic, pal, silencios(TRABAJO / "src.wav"), total)
-    corte = TRABAJO / "corte.mp4"
-    lapsos = cortar(src, tramos, corte)
-    correr("ffmpeg", "-v", "error", "-y", "-i", corte, "-ac", 1, "-ar", 16000, TRABAJO / "corte.wav")
+    corte, voz = TRABAJO / "corte.mp4", TRABAJO / "voz.wav"
+    lapsos = cortar(src, tramos, corte, voz)
+    correr("ffmpeg", "-v", "error", "-y", "-i", voz, "-ac", 1, "-ar", 16000, TRABAJO / "corte.wav")
     final_t = lapsos[-1][1]
+    for nombre, archivo in (("video", corte), ("audio", voz)):       # el corte tiene que durar lo que suman los tramos
+        if abs(duracion_de(archivo) - final_t) > 0.25:
+            raise RuntimeError(f"El corte salió mal: el {nombre} dura {duracion_de(archivo):.2f} s y debería durar {final_t:.2f} s")
     print(f"Pausas cortadas: de {total:.1f} s a {final_t:.1f} s. Verificando contra el guion")
     pal2 = transcribir(TRABAJO / "corte.wav")
     palabras, parecido = palabras_del_guion(orac, pal2, lapsos)
@@ -545,12 +576,14 @@ def componer(datos):
     dibujar_capas(tl, n, f1, min(n, f2 + 14) if hay else n)
     print("Componiendo")
     componer_cuadros(corte, tl, lapsos, n, f1, f2, TRABAJO / "mudo.mp4")
-    sumar_audio(TRABAJO / "mudo.mp4", corte, tl, datos, TRABAJO / "final.mp4")
+    sumar_audio(TRABAJO / "mudo.mp4", voz, tl, datos, TRABAJO / "final.mp4")
+    if abs(duracion_de(TRABAJO / "final.mp4") - final_t) > 0.3:
+        raise RuntimeError("El video final no dura lo que debería")
     informe = {"id": datos.get("id"), "duracion_original": round(total, 2), "duracion_final": round(final_t, 2),
                "parecido_con_guion": round(parecido, 3), "transcripcion_final": " ".join(p["w"] for p in pal2),
                "oraciones": [{"texto": o, "parecido": round(u[2], 3) if u else 0} for o, u in zip(orac, ubic)],
                "tramos": [[round(a, 2), round(b, 2), k] for a, b, k in tramos],
-               "duracion_corte": float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(corte)], capture_output=True, text=True).stdout or 0),
+               "duracion_corte": duracion_de(corte),
                "avisos": avisos, "revisar": bool(avisos) or parecido < 0.85}
     (TRABAJO / "informe.json").write_text(json.dumps(informe, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(informe, ensure_ascii=False, indent=1))
