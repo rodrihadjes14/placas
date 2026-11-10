@@ -106,7 +106,8 @@ const BUILD={
   return t=>{pop(a,t,T.pregunta,.35,.6);const esp=t>=T.pregunta+.5&&t<T.respuesta;pts.style.opacity=esp?1:0;[...pts.children].forEach((x,i)=>x.style.transform=`translateY(${-10*Math.max(0,Math.sin(t*9-i*.9))}px)`);pop(b,t,T.respuesta,.35,.6)}},
  vacio(el,e){return t=>{}},
  libre(el,e){const d=e.d,T=e.t;
-  const doc=new DOMParser().parseFromString(String(d.svg||''),'image/svg+xml'),sv=doc.documentElement;
+  let fuente=String(d.svg||'');if(!/xmlns\s*=/.test(fuente))fuente=fuente.replace(/<svg/i,'<svg xmlns="http://www.w3.org/2000/svg"');
+  const doc=new DOMParser().parseFromString(fuente,'image/svg+xml'),sv=doc.documentElement;
   if(!sv||sv.nodeName!=='svg'||doc.querySelector('parsererror'))throw new Error('svg');
   sv.querySelectorAll('script,foreignObject,image,use,iframe,style').forEach(x=>x.remove());
   sv.querySelectorAll('*').forEach(x=>[...x.attributes].forEach(a=>{if(/^on/i.test(a.name)||/url\(|javascript:|https?:/i.test(a.value))x.removeAttribute(a.name)}));
