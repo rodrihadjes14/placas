@@ -233,14 +233,14 @@ def cuando(frase, pal, desde=0.0, hasta=1e9):
     return None
 
 
-ETIQUETA_EFECTO = re.compile(r"<[^>]*\bdata-efecto=\"[^\"]*\"[^>]*>")
+ETIQUETA_EFECTO = re.compile(r"""<[^>]*\bdata-efecto=["'][^"']*["'][^>]*>""")
 PROHIBIDO_LIBRE = ("<script", "javascript:", "<iframe", "<object", "<embed", "<foreignobject", "<image", "<use", "http:", "https:", "url(", "@import")
 
 
 def libre_valido(g):
     """Un gráfico libre trae un SVG propio, sin código ni recursos externos, y con algún elemento animado."""
     svg = str(g.get("svg", ""))
-    bajo = re.sub(r'xmlns(:\w+)?="[^"]*"', "", svg.lower())
+    bajo = re.sub(r"""xmlns(:\w+)?=["'][^"']*["']""", "", svg.lower())
     return (bajo.lstrip().startswith("<svg") and bajo.rstrip().endswith("</svg>") and len(svg) <= 9000
             and not any(x in bajo for x in PROHIBIDO_LIBRE) and not re.search(r"\son\w+\s*=", bajo)
             and bool(ETIQUETA_EFECTO.search(svg)))
@@ -260,8 +260,8 @@ def tiempos_grafico(g, s, e, pal, avisos):
             return tiempos_grafico(dict(r, ancla=g.get("ancla")), s, e, pal, avisos) if isinstance(r, dict) and r.get("tipo") != "libre" else (None, g)
         el, x = [], s
         for i, tag in enumerate(ETIQUETA_EFECTO.findall(g["svg"])):
-            m = re.search(r'data-cuando="([^"]*)"', tag)
-            ti = b(m.group(1) if m else None, x, min(e - 0.4, s + 0.3 + 0.45 * i))
+            m = re.search(r"""data-cuando=["']([^"']*)["']""", tag)
+            ti = b(m.group(1) if m else None, x, min(e - 0.4, s + 0.2 + 0.28 * i))
             el.append(max(s + 0.1, ti - 0.1))
             x = ti
         return {"el": el}, g
