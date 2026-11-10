@@ -37,6 +37,10 @@ Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer a
     billetes   opcional, true por defecto: en los Reels de caso real (gancho con "$ monto") hace caer billetes de
                $20.000 y $10.000 cuando aparece el monto, junto con la caja registradora (animado/billetes.html,
                desde el 01/11/2026). false la apaga.
+    vineta     opcional, false por defecto (desde el 09/11/2026): oscurece los bordes del video del avatar para darle
+               foco, como la power window de DaVinci Resolve (elipse suave centrada en el avatar y, afuera, la curva de
+               VINETA_CURVA). Viene de la columna VIÑETA de la pestaña Avatares. Va debajo del b-roll, la lluvia de
+               billetes, el texto animado y los subtítulos, que no se oscurecen.
     cortes     opcional: segundos del audio original donde se partió el video en escenas
                (por ejemplo [5.89, 22.24]). Si viene, se busca cada corte en la imagen, se alterna
                el encuadre (normal / acercamiento) justo en ese cuadro y se corrigen los tiempos
@@ -82,6 +86,13 @@ REELS_ARRIBA = 250           # debajo del encabezado de Reels
 REELS_ABAJO = 1580           # arriba del texto y los botones inferiores de Reels
 MARGEN_CARA = 40             # aire mínimo entre la placa y la cabeza
 ALTO_SUBTITULO = 170         # dos renglones de subtítulo más un margen
+
+# Viñeta (09/11/2026): copia la power window de DaVinci. Elipse centrada en el avatar (medidas en fracción del cuadro
+# de 1080x1920); afuera se aplica la curva de luminancia (entrada/salida de 0 a 1), con una transición suave.
+VINETA_RADIO_X = 0.55        # semieje horizontal (fracción del ancho)
+VINETA_RADIO_Y = 0.48        # semieje vertical (fracción del alto)
+VINETA_SUAVIDAD = 0.35       # ancho de la transición (fracción del radio)
+VINETA_CURVA = "0/0 0.41/0.30 0.61/0.53 0.67/0.61 0.76/0.72 1/0.99"   # curva del nodo Vig de DaVinci
 
 # Escenas
 ACERCAMIENTO = 1.15          # 115 % en las escenas pares (2.ª, 4.ª...)
@@ -334,6 +345,29 @@ def alternar_encuadre(entrada, cuadros_corte, cara, destino):
     subprocess.run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada),
         "-filter_complex", ";".join(filtros), "-map", "[v]", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-c:a", "copy", str(destino),
+    ], check=True)
+    return destino
+
+
+def aplicar_vineta(entrada, cara, destino):
+    """Oscurece los bordes con una elipse suave centrada en el avatar (la power window de DaVinci, 09/11/2026)."""
+    import cv2
+    import numpy as np
+    ancho, alto = 1080, 1920
+    cy = min(max((cara["menton"] + 150) / alto, 0.40), 0.60) if cara else 0.48
+    y, x = np.mgrid[0:alto, 0:ancho].astype(np.float32)
+    d = np.sqrt(((x - 0.5 * ancho) / (VINETA_RADIO_X * ancho)) ** 2 + ((y - cy * alto) / (VINETA_RADIO_Y * alto)) ** 2)
+    m = np.clip((d - 1 + VINETA_SUAVIDAD) / (2 * VINETA_SUAVIDAD), 0, 1)
+    m = m * m * (3 - 2 * m)                       # 0 adentro de la elipse, 1 afuera
+    mascara = TRABAJO / "vineta.png"
+    cv2.imwrite(str(mascara), (m * 255).astype(np.uint8))
+    subprocess.run([
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(entrada), "-loop", "1", "-i", str(mascara),
+        "-filter_complex",
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=gbrp,split[a][b];"
+        f"[b]curves=master='{VINETA_CURVA}'[c];[1:v]format=gbrp[m];[a][c][m]maskedmerge,format=yuv420p[v]",
+        "-map", "[v]", "-map", "0:a?", "-shortest",
         "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-c:a", "copy", str(destino),
     ], check=True)
     return destino
@@ -923,6 +957,14 @@ def componer(datos):
             total = duracion(entrada)
         else:
             print("Aviso: no se encontraron todos los cortes; el video queda sin cambio de encuadre")
+
+    if datos.get("vineta"):                     # 09/11/2026: viñeta de la columna VIÑETA de Avatares
+        try:
+            entrada = aplicar_vineta(entrada, detectar_cara(entrada), TRABAJO / "vineta.mp4")
+            total = duracion(entrada)
+            print("Viñeta aplicada")
+        except Exception as e:                 # la viñeta nunca frena el video
+            print(f"Aviso: no se pudo aplicar la viñeta ({e}); el video sale sin viñeta")
 
     if datos.get("animado"):
         return componer_texto(datos, entrada, palabras, total)
