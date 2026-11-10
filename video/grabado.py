@@ -22,10 +22,11 @@ Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento):
               (primeras palabras de una oración del guion). El primero marca el fin de los gráficos.
     graficos  [{"ancla", "tipo", ...}]: gráficos del desarrollo; cada uno entra cuando se dice su ancla y dura hasta
               el siguiente. Tipos (plantillas de grabado.html):
-                tachado  {chica, grande, sello[, icono, cuando_sello]}       una tarjeta y un sello que la cruza
-                numero   {chica, numero, grande[, cuando]}                    un número grande y una frase
-                causa    {chica, desde, etiqueta, hasta[, icono_desde, icono_hasta, cuando_desde, cuando_etiqueta, cuando_hasta]}   A → flecha → B
-                lista    {titulo (con *resaltado*), items: [{texto[, detalle, icono, cuando]}]}   hasta 3 tarjetas
+                tachado, numero, causa, lista, pasos, monto, barra, versus, mito, documento, pregunta
+                (campos de cada uno en tiempos_grafico() y en las plantillas de grabado.html) y
+                libre    {chica, svg, respaldo}: un SVG propio (viewBox 0 0 940 680, sin código ni recursos externos)
+                         cuyos elementos con data-efecto ("pop", "sube", "aparece" o "dibuja") se animan cuando se
+                         dice su data-cuando; si el SVG no sirve o no se puede dibujar, se usa "respaldo" (otro gráfico).
               Cada elemento aparece cuando se dice su propio texto (o lo que diga "cuando"); si no se encuentra,
               entra escalonado. Iconos: cruz, peso, herramienta, documento, dolor.
     sfx       opcional, true por defecto: click al aparecer cada bloque o gráfico y whoosh al achicarse/agrandarse.
@@ -232,6 +233,76 @@ def cuando(frase, pal, desde=0.0, hasta=1e9):
     return None
 
 
+ETIQUETA_EFECTO = re.compile(r"<[^>]*\bdata-efecto=\"[^\"]*\"[^>]*>")
+PROHIBIDO_LIBRE = ("<script", "javascript:", "<iframe", "<object", "<embed", "<foreignobject", "<image", "<use", "http:", "https:", "url(", "@import")
+
+
+def libre_valido(g):
+    """Un gráfico libre trae un SVG propio, sin código ni recursos externos, y con algún elemento animado."""
+    svg = str(g.get("svg", ""))
+    bajo = re.sub(r'xmlns(:\w+)?="[^"]*"', "", svg.lower())
+    return (bajo.lstrip().startswith("<svg") and bajo.rstrip().endswith("</svg>") and len(svg) <= 9000
+            and not any(x in bajo for x in PROHIBIDO_LIBRE) and not re.search(r"\son\w+\s*=", bajo)
+            and bool(ETIQUETA_EFECTO.search(svg)))
+
+
+def tiempos_grafico(g, s, e, pal, avisos):
+    """Instantes en que aparece cada elemento de un gráfico: (tiempos, gráfico). Un gráfico libre que no sirve se
+    cambia por su "respaldo". Devuelve (None, g) si no se puede dibujar."""
+    def b(frase, desde=s, alt=None):
+        r = cuando(frase, pal, desde, e) if frase else None
+        return r if r is not None else alt
+    tipo = g.get("tipo")
+    if tipo == "libre":
+        if not libre_valido(g):
+            avisos.append(f"Gráfico libre descartado (ancla: {g.get('ancla')}); se usa el respaldo")
+            r = g.get("respaldo")
+            return tiempos_grafico(dict(r, ancla=g.get("ancla")), s, e, pal, avisos) if isinstance(r, dict) and r.get("tipo") != "libre" else (None, g)
+        el, x = [], s
+        for i, tag in enumerate(ETIQUETA_EFECTO.findall(g["svg"])):
+            m = re.search(r'data-cuando="([^"]*)"', tag)
+            ti = b(m.group(1) if m else None, x, min(e - 0.4, s + 0.3 + 0.45 * i))
+            el.append(max(s + 0.1, ti - 0.1))
+            x = ti
+        return {"el": el}, g
+    if tipo == "tachado":
+        t = {"entra": s + 0.08, "sello": b(g.get("cuando_sello") or g.get("sello"), s, s + 0.5)}
+        t["sello"] = min(max(t["sello"] - 0.1, s + 0.3), e - 0.4)
+    elif tipo == "numero":
+        n = b(g.get("cuando") or g.get("grande"), s, s + 0.6)
+        t = {"chica": s + 0.05, "numero": max(s + 0.2, n - 0.1), "grande": max(s + 0.5, n + 0.2)}
+    elif tipo == "causa":
+        d = b(g.get("cuando_desde") or g.get("desde"), s, s + 0.6)
+        q = b(g.get("cuando_etiqueta") or g.get("etiqueta"), d, d + 0.6)
+        t = {"desde": max(s + 0.15, d - 0.15), "etiqueta": q,
+             "hasta": max(q + 0.3, b(g.get("cuando_hasta") or g.get("hasta"), q, q + 0.6) - 0.15)}
+    elif tipo in ("lista", "pasos"):
+        items, det, x = [], [], s
+        for j, it in enumerate(g.get("items") or []):
+            ti = b(it.get("cuando") or it.get("texto"), x, max(x, s + 0.8) + (1.0 if j else 0.0))
+            items.append(max(s + 0.3, ti - 0.1))
+            det.append(b(it.get("detalle"), ti, ti + 0.8))
+            x = ti + 0.2
+        t = {"items": items, "detalles": det}
+    elif tipo in ("monto", "barra"):
+        n = b(g.get("cuando") or g.get("grande"), s, s + 0.4)
+        t = {"entra": max(s + 0.15, n - 0.1)}
+    elif tipo == "versus":
+        i = b(g.get("cuando_izquierda") or (g.get("izquierda") or {}).get("texto"), s, s + 0.3)
+        d = b(g.get("cuando_derecha") or (g.get("derecha") or {}).get("texto"), i, i + 1.2)
+        t = {"izq": max(s + 0.1, i - 0.1), "der": max(i + 0.5, d - 0.1)}
+    elif tipo == "mito":
+        t = {"mito": s + 0.08, "verdad": max(s + 0.6, b(g.get("cuando_verdad") or g.get("verdad"), s, s + 1.5) - 0.1)}
+    elif tipo == "documento":
+        t = {"entra": s + 0.08, "sello": min(max(b(g.get("cuando_sello") or g.get("sello"), s, s + 0.8) - 0.1, s + 0.4), e - 0.4)}
+    elif tipo == "pregunta":
+        t = {"pregunta": s + 0.08, "respuesta": max(s + 0.7, b(g.get("cuando_respuesta") or g.get("respuesta"), s, s + 1.4) - 0.1)}
+    else:
+        avisos.append(f"Tipo de gráfico desconocido: {tipo}")
+        return None, g
+    return t, g
+
+
 def linea_de_tiempo(datos, pal, lapsos, total):
     inicio_o = {}
     for d, h, k in lapsos:
@@ -260,31 +331,10 @@ def linea_de_tiempo(datos, pal, lapsos, total):
     escenas = []
     for i, (s, g) in enumerate(graf):
         e = graf[i + 1][0] if i + 1 < len(graf) else pip[1]
-        b = lambda frase, desde=s, alt=None: (lambda r: r if r is not None else alt)(cuando(frase, pal, desde, e) if frase else None)
-        tipo = g.get("tipo")
-        if tipo == "tachado":
-            t = {"entra": s + 0.08, "sello": b(g.get("cuando_sello") or g.get("sello"), s, s + 0.5)}
-            t["sello"] = min(max(t["sello"] - 0.1, s + 0.3), e - 0.4)
-        elif tipo == "numero":
-            n = b(g.get("cuando") or g.get("grande"), s, s + 0.6)
-            t = {"chica": s + 0.05, "numero": max(s + 0.2, n - 0.1), "grande": max(s + 0.5, n + 0.2)}
-        elif tipo == "causa":
-            d = b(g.get("cuando_desde") or g.get("desde"), s, s + 0.6)
-            q = b(g.get("cuando_etiqueta") or g.get("etiqueta"), d, d + 0.6)
-            t = {"desde": max(s + 0.15, d - 0.15), "etiqueta": q,
-                 "hasta": max(q + 0.3, b(g.get("cuando_hasta") or g.get("hasta"), q, q + 0.6) - 0.15)}
-        elif tipo == "lista":
-            items, det, x = [], [], s
-            for j, it in enumerate(g.get("items") or []):
-                ti = b(it.get("cuando") or it.get("texto"), x, max(x, s + 0.8) + (1.0 if j else 0.0))
-                items.append(max(s + 0.3, ti - 0.1))
-                det.append(b(it.get("detalle"), ti, ti + 0.8))
-                x = ti + 0.2
-            t = {"items": items, "detalles": det}
-        else:
-            avisos.append(f"Tipo de gráfico desconocido: {tipo}")
+        t, g2 = tiempos_grafico(g, s, e, pal, avisos)
+        if t is None:
             continue
-        escenas.append({"tipo": tipo, "s": s, "e": e, "d": g, "t": t})
+        escenas.append({"tipo": g2.get("tipo"), "s": s, "e": e, "d": g2, "t": t})
     bloques = []
     if datos.get("gancho"):
         fin_gancho = pip[0] if graf else next((h for d, h, k in lapsos if k == 0), total)
@@ -304,7 +354,16 @@ def dibujar_capas(tl, n, f1, f2):
         for capa, cuadros in (("bg", range(f1, f2)), ("fg", range(n))):
             pag = nav.new_page(viewport={"width": W, "height": H})
             pag.goto(f"file://{AQUI / 'grabado.html'}?layer={capa}")
-            pag.evaluate("d => setData(d)", tl)
+            malos = pag.evaluate("d => setData(d)", {k: v for k, v in tl.items() if not k.startswith("_")}) or []
+            if capa == "bg" and malos:               # un gráfico libre no se pudo dibujar: va su respaldo
+                for i in malos:
+                    e = tl["escenas"][i]
+                    r = e["d"].get("respaldo")
+                    t, g2 = tiempos_grafico(dict(r, ancla=e["d"].get("ancla")), e["s"], e["e"], tl["_pal"], tl["_avisos"]) if isinstance(r, dict) and r.get("tipo") != "libre" else (None, None)
+                    tl["_avisos"].append(f"Gráfico libre que no se pudo dibujar (ancla: {e['d'].get('ancla')}); " + ("se usa el respaldo" if t else "queda sin gráfico"))
+                    tl["escenas"][i] = {"tipo": g2["tipo"], "s": e["s"], "e": e["e"], "d": g2, "t": t} if t else {"tipo": "vacio", "s": e["s"], "e": e["e"], "d": {}, "t": {}}
+                pag.goto(f"file://{AQUI / 'grabado.html'}?layer={capa}")
+                pag.evaluate("d => setData(d)", {k: v for k, v in tl.items() if not k.startswith("_")})
             pag.wait_for_timeout(400)
             for f in cuadros:
                 pag.evaluate("t => setT(t)", f / FPS)
@@ -453,6 +512,7 @@ def componer(datos):
     palabras, parecido = palabras_del_guion(orac, pal2, lapsos)
     tl, avisos = linea_de_tiempo(datos, palabras, lapsos, final_t)
     tl["subs"] = subtitulos(palabras)
+    tl["_pal"], tl["_avisos"] = palabras, avisos
     parecida = lambda x, y: difflib.SequenceMatcher(None, x, y).ratio() >= 0.6
     for k, o in enumerate(orac):                       # ¿el corte se comió el arranque o el final de una oración?
         d, h = min((l[0] for l in lapsos if l[2] == k), default=None), max((l[1] for l in lapsos if l[2] == k), default=None)
