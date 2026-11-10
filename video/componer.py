@@ -1,5 +1,5 @@
 """
-Compone el video final: video de HeyGen + placas + subtítulos con la palabra activa resaltada.
+Compone el video final: video de HeyGen + placas + subtítulos en mayúscula, con pop in y la palabra activa resaltada.
 
 Recibe un JSON (por la variable de entorno PAYLOAD o como archivo en el primer argumento) con:
     id         ID de la fila en la pestaña Aprobación
@@ -76,8 +76,17 @@ AMARILLO = "&H003FD2FF"      # #FFD23F en formato BGR de ASS
 CONTORNO = "&H001A1B1C"      # #1C1B1A
 SOMBRA = "&H73000000"
 POS_Y_DEFECTO = 1170         # parte superior del subtítulo si no se detecta la cara
-MAX_PALABRAS = 5
-MAX_CARACTERES = 28
+MAX_PALABRAS = 4             # 10/11/2026: en mayúscula el texto ocupa más (antes 5 palabras y 28 caracteres)
+MAX_CARACTERES = 24
+# Desde el 10/11/2026 los subtítulos van en MAYÚSCULA en todos los Reels (informativos y de caso) y cada bloque
+# entra con un "pop in": arranca chico, se pasa un poco del tamaño y se asienta.
+MAYUSCULA = True
+ANCHO_UTIL = 800             # ancho disponible para el subtítulo (1080 menos los márgenes de 140)
+ANCHO_LETRA = 0.60           # ancho promedio de una letra mayúscula de Inter ExtraBold, en fracción del tamaño
+POP_DESDE = 70               # escala inicial del bloque, en %
+POP_PICO = 108               # escala máxima (rebote), en %
+POP_SUBE = 120               # milisegundos de POP_DESDE a POP_PICO
+POP_ASIENTA = 80             # milisegundos de POP_PICO a 100 %
 
 # Placas
 DURACION_MAX_PLACA = 6.0
@@ -177,12 +186,45 @@ def palabras_para_subtitulos(palabras):
     return res
 
 
+def cortes_de_linea(bloque):
+    """Índices de las palabras que abren un renglón nuevo. Los renglones se cortan a mano (WrapStyle 2) para que
+    el texto no cambie de renglón mientras crece con el pop in."""
+    tope = max(6, int(ANCHO_UTIL / (TAM * ANCHO_LETRA)))
+    cortes, largo = set(), 0
+    for k, x in enumerate(bloque):
+        n = len(limpiar(x["w"]))
+        if k and largo + 1 + n > tope:
+            cortes.add(k)
+            largo = n
+        else:
+            largo += n + (1 if k else 0)
+    return cortes
+
+
+def pop_in(ms):
+    """Etiquetas ASS del pop in para una línea que empieza `ms` milisegundos después de que apareció su bloque.
+    Cada palabra activa es una línea aparte, así que la animación se continúa de una a otra sin saltos."""
+    def escala(v):
+        return f"\\fscx{v:.0f}\\fscy{v:.0f}"
+    total = POP_SUBE + POP_ASIENTA
+    if ms >= total:
+        return ""
+    if ms < POP_SUBE:
+        ahora = POP_DESDE + (POP_PICO - POP_DESDE) * ms / POP_SUBE
+        return ("{" + escala(ahora) + f"\\t(0,{POP_SUBE - ms:.0f}," + escala(POP_PICO) + ")"
+                + f"\\t({POP_SUBE - ms:.0f},{total - ms:.0f}," + escala(100) + ")}")
+    ahora = POP_PICO - (POP_PICO - 100) * (ms - POP_SUBE) / POP_ASIENTA
+    return "{" + escala(ahora) + f"\\t(0,{total - ms:.0f}," + escala(100) + ")}"
+
+
 def escribir_ass(palabras, destino, pos_y=POS_Y_DEFECTO):
+    if MAYUSCULA:
+        palabras = [dict(p, w=str(p["w"]).upper()) for p in palabras]
     cab = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
 PlayResY: 1920
-WrapStyle: 0
+WrapStyle: 2
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
@@ -198,13 +240,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         fin_bloque = float(bloque[-1]["e"]) + 0.15
         if b + 1 < len(bloques):   # que un subtítulo no se superponga con el siguiente
             fin_bloque = min(fin_bloque, float(bloques[b + 1][0]["s"]))
+        cortes = cortes_de_linea(bloque)
+        aparece = float(bloque[0]["s"])
         for j, p in enumerate(bloque):
             ini = float(p["s"])
             fin = float(bloque[j + 1]["s"]) if j + 1 < len(bloque) else fin_bloque
-            texto = " ".join(
-                ("{\\c" + AMARILLO + "&}" + limpiar(x["w"]) + "{\\c" + BLANCO + "&}") if k == j else limpiar(x["w"])
+            texto = "".join(
+                ("\\N" if k in cortes else (" " if k else ""))
+                + (("{\\c" + AMARILLO + "&}" + limpiar(x["w"]) + "{\\c" + BLANCO + "&}") if k == j else limpiar(x["w"]))
                 for k, x in enumerate(bloque)
             )
+            texto = pop_in(round((ini - aparece) * 1000)) + texto
             lineas.append(f"Dialogue: 0,{t_ass(ini)},{t_ass(fin)},Sub,,0,0,0,,{texto}")
     destino.write_text(cab + "\n".join(lineas) + "\n", encoding="utf-8")
 
