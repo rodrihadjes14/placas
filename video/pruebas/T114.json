@@ -1,5 +1,6 @@
 {
  "id": "T114",
+ "sfx": true,
  "guion": "Hace diez años que usás la misma herramienta y la muñeca no responde. No alcanza con que te duela, hay que probar una sola cosa. Hay que probar que tu trabajo causó esa enfermedad. Con esa prueba la ART te debe tratamiento y una indemnización por las secuelas. ¿Tu enfermedad empezó con el trabajo que vos hacés? Respondé sí o no en los comentarios, y si te pasó a vos, escribinos al WhatsApp desde el link del perfil.",
  "etiqueta": "ENFERMEDAD PROFESIONAL · ART",
  "gancho": {"chica": "10 AÑOS CON LA MISMA HERRAMIENTA", "grande": "Y LA MUÑECA NO RESPONDE"},

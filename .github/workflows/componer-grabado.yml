@@ -24,12 +24,14 @@ jobs:
       run:
         working-directory: video
     env:
-      CARPETA_TRABAJO: ${{ runner.temp }}/trabajo
       CARPETA_DRIVE: 1D-Hn4I9FCGM78aBIcAAwnBZZOR-ZMtIz
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+
+      - name: Carpeta de trabajo
+        run: echo "CARPETA_TRABAJO=$RUNNER_TEMP/trabajo" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
