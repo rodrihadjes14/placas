@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<!-- Capas del Reel grabado (video/grabado.py): ?layer=bg dibuja los gráficos animados que van de fondo mientras
+     el abogado queda recortado en la esquina; ?layer=fg dibuja, con fondo transparente, los bloques de texto del
+     gancho y del cierre y los subtítulos. Todo se calcula a partir del tiempo: setData(datos) y setT(segundos). -->
+<style>
+@font-face{font-family:BG;font-weight:200 800;src:url(fuentes/BricolageGrotesque-variable.woff2) format("woff2")}
+:root{--hueso:#F2EDE4;--carbon:#1C1C1C;--ama:#FFD21F;--gris:#8A857C}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;font-family:BG,sans-serif;font-weight:800;color:var(--carbon)}
+.abs{position:absolute}
+#bg{position:absolute;inset:0;background:var(--hueso);display:none}
+#dots{position:absolute;inset:-80px;background-image:radial-gradient(#1c1c1c22 2.2px,transparent 2.6px);background-size:54px 54px}
+.chip{position:absolute;left:70px;top:236px;background:#fff;font-size:34px;letter-spacing:.5px;padding:12px 22px;border-radius:10px;box-shadow:0 6px 0 #1c1c1c18;transform-origin:left center;white-space:nowrap}
+.scene{position:absolute;left:0;top:0;width:1080px;height:1920px;display:none}
+.kicker{position:absolute;left:70px;width:940px;font-size:44px;font-weight:600;color:var(--gris);letter-spacing:1px;white-space:nowrap}
+.card{position:absolute;left:70px;width:940px;border-radius:36px;background:#fff;box-shadow:0 14px 0 #1c1c1c14,0 30px 60px #1c1c1c1f;display:flex;align-items:center;gap:34px;padding:0 46px;white-space:nowrap}
+.dark{background:var(--carbon);color:#fff}.yel{background:var(--ama);color:var(--carbon)}
+.fit{display:inline-block;white-space:nowrap}
+.stamp{position:absolute;left:0;width:1080px;display:flex;justify-content:center}
+.stamp>div{background:var(--carbon);color:#fff;font-size:92px;padding:14px 40px;border-radius:14px;white-space:nowrap}
+.check{position:absolute;right:-28px;top:-28px;width:96px;height:96px;border-radius:50%;background:var(--ama);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 0 #1c1c1c22}
+.tblock{position:absolute;left:0;top:330px;width:1080px;display:none;flex-direction:column;align-items:center;gap:14px}
+.tsmall{background:#fff;color:#111;font-size:50px;padding:10px 26px;border-radius:8px;white-space:nowrap}
+.tbig{background:var(--ama);color:#111;font-size:92px;line-height:1;padding:18px 34px;border-radius:10px;white-space:nowrap}
+#sub{position:absolute;display:none;gap:18px;justify-content:center;flex-wrap:wrap;white-space:nowrap;font-size:74px;line-height:1.12;letter-spacing:.5px}
+#sub span{padding:2px 10px;border-radius:10px}
+#sub.full{left:90px;width:900px;top:1500px;color:#fff;text-shadow:0 0 14px #000c,0 4px 0 #000,3px 3px 0 #000,-3px -3px 0 #000,3px -3px 0 #000,-3px 3px 0 #000}
+#sub.full span.on{color:var(--ama)}
+#sub.pip{left:520px;width:500px;top:1330px;color:var(--carbon);font-size:64px}
+#sub.pip span.on{background:var(--ama)}
+</style></head><body>
+<div id="bg"><div id="dots"></div><div class="chip" id="chip"></div><div id="scenes"></div></div>
+<div id="fg" style="display:none"><div id="blocks"></div><div id="sub"></div></div>
+<script>
+const LAYER=new URLSearchParams(location.search).get('layer')||'bg';
+const $=id=>document.getElementById(id);
+$(LAYER).style.display='block';
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x)), pr=(t,s,d)=>cl((t-s)/d), eo=p=>1-Math.pow(1-p,3);
+const back=p=>{const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(p-1,3)+c1*Math.pow(p-1,2)};
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const res=s=>esc(s).replace(/\*([^*]+)\*/g,'<span class="yel" style="padding:6px 22px;border-radius:12px;display:inline-block">$1</span>');
+function pop(el,t,s,d=.32,from=.55){const p=pr(t,s,d);el.style.opacity=cl(p*5);el.style.transform=`scale(${from+(1-from)*back(p)})`}
+function rise(el,t,s,d=.4,dy=70){const p=eo(pr(t,s,d));el.style.opacity=cl(pr(t,s,d)*4);el.style.transform=`translateY(${(1-p)*dy}px)`}
+const ICON={
+ cruz:c=>`<svg width="120" height="120" viewBox="0 0 120 120" style="flex:none"><rect x="42" y="8" width="36" height="104" rx="8" fill="${c}"/><rect x="8" y="42" width="104" height="36" rx="8" fill="${c}"/></svg>`,
+ peso:c=>`<svg width="120" height="120" viewBox="0 0 120 120" style="flex:none"><circle cx="60" cy="60" r="58" fill="${c}"/><text x="60" y="89" text-anchor="middle" font-family="BG" font-weight="800" font-size="84" fill="${c=='#FFD21F'?'#1C1C1C':'#FFD21F'}">$</text></svg>`,
+ herramienta:c=>`<svg width="120" height="120" viewBox="0 0 120 120" style="flex:none"><path d="M82 10a30 30 0 0 0-29 38L12 89a13 13 0 0 0 19 19l41-41a30 30 0 0 0 38-36l-19 19-17-5-5-17 19-19a30 30 0 0 0-6 1z" fill="${c}"/></svg>`,
+ documento:c=>`<svg width="120" height="120" viewBox="0 0 120 120" style="flex:none"><path d="M26 8h46l26 26v70a8 8 0 0 1-8 8H26a8 8 0 0 1-8-8V16a8 8 0 0 1 8-8z" fill="${c}"/><rect x="34" y="52" width="52" height="9" rx="4" fill="#8A857C"/><rect x="34" y="72" width="52" height="9" rx="4" fill="#8A857C"/></svg>`,
+ dolor:c=>`<svg width="150" height="150" viewBox="0 0 280 280" style="flex:none"><circle class="r1" cx="140" cy="140" r="60" fill="none" stroke="${c}" stroke-width="10"/><circle class="r2" cx="140" cy="140" r="60" fill="none" stroke="${c}" stroke-width="6"/><circle cx="140" cy="140" r="44" fill="${c}"/><path d="M150 104 L118 146 L140 146 L130 178 L164 134 L141 134 Z" fill="#FFD21F"/></svg>`};
+const icon=(n,c)=>(ICON[n]||ICON.documento)(c);
+const CHECK='<div class="check"><svg width="56" height="56" viewBox="0 0 56 56"><path d="M10 30 L23 43 L46 15" fill="none" stroke="#1C1C1C" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+const BUILD={
+ tachado(el,e){const d=e.d,T=e.t;
+  el.innerHTML=`<div class="card" style="top:380px;height:470px;gap:44px;padding-left:70px">${icon(d.icono||'dolor','#1C1C1C')}<div><div style="font-size:52px;font-weight:600;color:var(--gris)">${esc(d.chica)}</div><div class="fit" data-max="560" style="font-size:118px;line-height:1.05">${esc(d.grande)}</div></div></div><div class="stamp" style="top:770px"><div class="fit" data-max="900">${esc(d.sello)}</div></div>`;
+  const c=el.children[0],s=el.children[1].firstChild,r1=el.querySelector('.r1'),r2=el.querySelector('.r2');
+  return t=>{const p=eo(pr(t,T.entra,.4));c.style.opacity=cl(pr(t,T.entra,.4)*4);c.style.transform=`translateY(${(1-p)*90}px) rotate(${-2+2*p}deg)`;c.style.filter=`grayscale(${pr(t,T.sello+.2,.3)})`;
+   if(r1){const k=(t*1.6)%1,k2=(t*1.6+.5)%1;r1.setAttribute('r',60+k*70);r1.style.opacity=1-k;r2.setAttribute('r',60+k2*70);r2.style.opacity=1-k2}
+   const ps=pr(t,T.sello,.22);s.style.opacity=cl(ps*5);s.style.transform=`rotate(-5deg) scale(${2.2-1.2*eo(ps)})`}},
+ numero(el,e){const d=e.d,T=e.t;
+  el.innerHTML=`<div class="kicker" style="top:410px;text-align:center">${esc(d.chica)}</div><div class="abs yel" style="left:390px;top:500px;width:300px;height:300px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${String(d.numero).length>1?150:230}px;line-height:1;box-shadow:0 14px 0 #1c1c1c22">${esc(d.numero)}</div><div class="abs" style="left:0;width:1080px;top:850px;text-align:center;line-height:1"><span class="fit" data-max="960" style="font-size:112px">${esc(d.grande)}</span></div>`;
+  const [k,o,g]=el.children;
+  return t=>{rise(k,t,T.chica,.35,40);const po=pr(t,T.numero,.4);o.style.opacity=cl(po*5);o.style.transform=`scale(${.3+.7*back(po)}) rotate(${(1-eo(po))*-25}deg)`;rise(g,t,T.grande,.35,60)}},
+ causa(el,e){const d=e.d,T=e.t;
+  el.innerHTML=`<div class="kicker" style="top:340px">${esc(d.chica)}</div><div class="card dark" style="top:420px;height:210px">${icon(d.icono_desde||'herramienta','#FFD21F')}<div class="fit" data-max="700" style="font-size:104px;line-height:1">${esc(d.desde)}</div></div><svg class="abs" style="left:440px;top:630px" width="200" height="220" viewBox="0 0 200 220"><line x1="100" y1="6" x2="100" y2="170" stroke="#1C1C1C" stroke-width="16" stroke-linecap="round" stroke-dasharray="164" stroke-dashoffset="164"/><path d="M58 150 L100 206 L142 150 Z" fill="#1C1C1C"/></svg><div class="abs yel fit" data-max="400" style="left:590px;top:690px;font-size:64px;padding:8px 28px;border-radius:12px;box-shadow:0 6px 0 #1c1c1c22">${esc(d.etiqueta)}</div><div class="card yel" style="top:850px;height:210px">${icon(d.icono_hasta||'cruz','#1C1C1C')}<div class="fit" data-max="700" style="font-size:104px;line-height:1">${esc(d.hasta)}</div></div>`;
+  const [k,a,sv,lab,b]=el.children,line=sv.children[0],head=sv.children[1];
+  return t=>{rise(k,t,e.s+.05,.3,30);rise(a,t,T.desde,.4,80);line.setAttribute('stroke-dashoffset',164*(1-eo(pr(t,T.etiqueta-.2,.45))));head.style.opacity=pr(t,T.etiqueta+.15,.1);pop(lab,t,T.etiqueta,.3);const pb=pr(t,T.hasta,.38);b.style.opacity=cl(pb*5);b.style.transform=`scale(${.7+.3*back(pb)})`}},
+ lista(el,e){const d=e.d,T=e.t,n=d.items.length,h=n>2?190:240,gap=40;
+  el.innerHTML=`<div class="abs" style="left:70px;top:350px;font-size:100px;line-height:1.1;white-space:nowrap"><span class="fit" data-max="940">${res(d.titulo)}</span></div>`+d.items.map((it,i)=>{const dk=i%2==1;return `<div class="card ${dk?'dark':''}" style="top:${520+i*(h+gap)}px;height:${h}px;overflow:visible">${icon(it.icono||'documento',dk?'#FFD21F':'#1C1C1C')}<div><div class="fit" data-max="700" style="font-size:88px;line-height:1.05;${dk?'color:var(--ama)':''}">${esc(it.texto)}</div>${it.detalle?`<div class="det" style="font-size:50px;font-weight:600;${dk?'':'color:var(--gris)'}">${esc(it.detalle)}</div>`:''}</div>${CHECK}</div>`}).join('');
+  const k=el.children[0],cs=[...el.querySelectorAll('.card')];
+  return t=>{rise(k,t,e.s+.08,.35,50);cs.forEach((c,i)=>{const ti=T.items[i];rise(c,t,ti,.4,90);pop(c.querySelector('.check'),t,ti+.3,.3,.2);const dt=c.querySelector('.det');if(dt)dt.style.opacity=pr(t,T.detalles[i],.25)})}}};
+let D=null,UPD=[],last=-1;
+function fitAll(root){root.querySelectorAll('.fit,.tbig,.tsmall').forEach(e=>{const max=+(e.dataset.max||960);let f=parseFloat(getComputedStyle(e).fontSize);while(e.offsetWidth>max&&f>26){f-=2;e.style.fontSize=f+'px'}})}
+window.setData=async d=>{D=d;await document.fonts.ready;
+ if(LAYER==='bg'){$('chip').textContent=d.etiqueta||'';const box=$('scenes');
+  UPD=d.escenas.map(e=>{const el=document.createElement('div');el.className='scene';el.style.display='block';box.appendChild(el);const u=BUILD[e.tipo](el,e);return {e,el,u}});
+  fitAll(box);UPD.forEach(x=>x.el.style.display='none')}
+ else{const box=$('blocks');d.bloques.forEach(b=>{const el=document.createElement('div');el.className='tblock';el.style.display='flex';
+   el.innerHTML=(b.chica?`<div class="tsmall">${esc(b.chica)}</div>`:'')+`<div class="tbig">${esc(b.grande)}</div>`+(b.pie?`<div class="tsmall" style="font-size:42px">${esc(b.pie)}</div>`:'');box.appendChild(el);b.el=el});
+  fitAll(box);d.bloques.forEach(b=>b.el.style.display='none')}};
+window.setT=t=>{if(!D)return;
+ if(LAYER==='bg'){$('dots').style.transform=`translate(${(t*9)%54}px,${(t*6)%54}px)`;pop($('chip'),t,D.pip[0]+.15,.35,.7);
+  UPD.forEach((x,i)=>{const e=x.e,ult=i===UPD.length-1,vis=t>=e.s-.001&&t<e.e+(ult?.6:0);x.el.style.display=vis?'block':'none';if(!vis)return;
+   const out=ult?0:pr(t,e.e-.18,.18);x.el.style.opacity=1-out;x.el.style.transform=`translateY(${-40*eo(out)}px)`;x.u(t)})}
+ else{D.bloques.forEach(b=>{const vis=t>=b.s&&t<b.e;b.el.style.display=vis?'flex':'none';if(!vis)return;b.el.style.opacity=1-pr(t,b.e-.15,.15);
+   [...b.el.children].forEach((k,i)=>{const p=pr(t,b.s+.06+i*.12,.3);k.style.opacity=cl(p*5);k.style.transform=`scale(${.6+.4*back(p)})`})});
+  const s=$('sub');let ci=-1;for(let i=0;i<D.subs.length;i++){if(t>=D.subs[i].s-.001&&t<D.subs[i].e){ci=i;break}}
+  if(ci<0){s.style.display='none';last=-1;return}
+  const c=D.subs[ci];if(ci!==last){s.innerHTML=c.words.map(w=>`<span>${esc(w.w)}</span>`).join('');last=ci}
+  s.style.display='flex';s.className=(c.s>=D.pip[0]-.05&&c.s<D.pip[1]-.05)?'pip':'full';
+  const p=pr(t,c.s,.14);s.style.transform=`scale(${.72+.28*back(p)})`;s.style.opacity=cl(p*6);
+  [...s.children].forEach((sp,i)=>{sp.className=(t>=c.words[i].s&&t<c.words[i].e)?'on':''})}};
+</script></body></html>

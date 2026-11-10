@@ -1,0 +1,82 @@
+name: Componer Reel grabado
+
+# Arma el Reel a partir de una grabación del abogado subida a la carpeta "Grabaciones Reels" de Drive
+# (video/grabado.py): corta las pausas, recorta la silueta, suma gráficos, textos y subtítulos, y sube el
+# resultado a Cloudinary como final-<ID>-grabado.
+# Lo dispara el Apps Script con el evento componer-grabado. Para pruebas, también corre al subir un archivo
+# a video/pruebas/ en la rama reel-grabado (usa el último archivo modificado como payload).
+on:
+  repository_dispatch:
+    types: [componer-grabado]
+  push:
+    branches: [reel-grabado]
+    paths: ['video/pruebas/*.json']
+
+concurrency:
+  group: grabado-${{ github.event.client_payload.id || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  componer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: video
+    env:
+      CARPETA_TRABAJO: ${{ runner.temp }}/trabajo
+      CARPETA_DRIVE: 1D-Hn4I9FCGM78aBIcAAwnBZZOR-ZMtIz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar herramientas
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          pip install -q playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests
+          python -m playwright install --with-deps chromium
+
+      - name: Preparar payload
+        env:
+          PAYLOAD_EVENTO: ${{ toJson(github.event.client_payload) }}
+        run: |
+          mkdir -p "$CARPETA_TRABAJO"
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            printf '%s' "$PAYLOAD_EVENTO" > "$CARPETA_TRABAJO/payload.json"
+          else
+            ARCHIVO=$(git diff --name-only HEAD~1 HEAD -- pruebas | grep '\.json$' | tail -1)
+            cp "../$ARCHIVO" "$CARPETA_TRABAJO/payload.json"
+          fi
+          echo "FILA=$(python -c "import json,sys;print(json.load(open(sys.argv[1]))['id'])" "$CARPETA_TRABAJO/payload.json")" >> "$GITHUB_ENV"
+
+      - name: Bajar la grabación de Drive
+        env:
+          GOOGLE_DRIVE_SA: ${{ secrets.GOOGLE_DRIVE_SA }}
+        run: python drive.py "$FILA" "$CARPETA_TRABAJO/origen.mov"
+
+      - name: Componer
+        env:
+          ORIGEN: ${{ runner.temp }}/trabajo/origen.mov
+        run: python grabado.py "$CARPETA_TRABAJO/payload.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reel-${{ env.FILA }}
+          path: |
+            ${{ runner.temp }}/trabajo/final.mp4
+            ${{ runner.temp }}/trabajo/informe.json
+          retention-days: 7
+
+      - name: Subir a Cloudinary
+        run: |
+          curl -sS --fail-with-body \
+            -F "file=@$CARPETA_TRABAJO/final.mp4" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=final-${FILA}-grabado" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/video/upload
