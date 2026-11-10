@@ -13,6 +13,7 @@ Qué hace, en orden:
 
 Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento):
     id        ID de la fila (T114)
+    video_id  identificador de esta composición; el resultado se sube como final-<id>-<video_id>
     video     archivo de la grabación (si falta, usa la variable de entorno ORIGEN)
     guion     el guion textual que se leyó
     etiqueta  texto del rótulo fijo que se ve arriba durante los gráficos ("ENFERMEDAD PROFESIONAL · ART")
@@ -23,7 +24,7 @@ Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento):
               el siguiente. Tipos (plantillas de grabado.html):
                 tachado  {chica, grande, sello[, icono, cuando_sello]}       una tarjeta y un sello que la cruza
                 numero   {chica, numero, grande[, cuando]}                    un número grande y una frase
-                causa    {chica, desde, etiqueta, hasta[, icono_desde, icono_hasta]}   A → flecha → B
+                causa    {chica, desde, etiqueta, hasta[, icono_desde, icono_hasta, cuando_desde, cuando_etiqueta, cuando_hasta]}   A → flecha → B
                 lista    {titulo (con *resaltado*), items: [{texto[, detalle, icono, cuando]}]}   hasta 3 tarjetas
               Cada elemento aparece cuando se dice su propio texto (o lo que diga "cuando"); si no se encuentra,
               entra escalonado. Iconos: cruz, peso, herramienta, documento, dolor.
@@ -268,9 +269,10 @@ def linea_de_tiempo(datos, pal, lapsos, total):
             n = b(g.get("cuando") or g.get("grande"), s, s + 0.6)
             t = {"chica": s + 0.05, "numero": max(s + 0.2, n - 0.1), "grande": max(s + 0.5, n + 0.2)}
         elif tipo == "causa":
-            d = b(g.get("desde"), s, s + 0.6)
-            q = b(g.get("etiqueta"), d, d + 0.6)
-            t = {"desde": max(s + 0.15, d - 0.15), "etiqueta": q, "hasta": max(q + 0.3, b(g.get("hasta"), q, q + 0.6) - 0.15)}
+            d = b(g.get("cuando_desde") or g.get("desde"), s, s + 0.6)
+            q = b(g.get("cuando_etiqueta") or g.get("etiqueta"), d, d + 0.6)
+            t = {"desde": max(s + 0.15, d - 0.15), "etiqueta": q,
+                 "hasta": max(q + 0.3, b(g.get("cuando_hasta") or g.get("hasta"), q, q + 0.6) - 0.15)}
         elif tipo == "lista":
             items, det, x = [], [], s
             for j, it in enumerate(g.get("items") or []):

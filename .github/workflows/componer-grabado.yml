@@ -2,7 +2,7 @@ name: Componer Reel grabado
 
 # Arma el Reel a partir de una grabación del abogado subida a la carpeta "Grabaciones Reels" de Drive
 # (video/grabado.py): corta las pausas, recorta la silueta, suma gráficos, textos y subtítulos, y sube el
-# resultado a Cloudinary como final-<ID>-grabado.
+# resultado a Cloudinary como final-<ID>-<VIDEO_ID>.
 # Lo dispara el Apps Script con el evento componer-grabado. Para pruebas, también corre al subir un archivo
 # a video/pruebas/ en la rama reel-grabado (usa el último archivo modificado como payload).
 on:
@@ -56,6 +56,7 @@ jobs:
             cp "../$ARCHIVO" "$CARPETA_TRABAJO/payload.json"
           fi
           echo "FILA=$(python -c "import json,sys;print(json.load(open(sys.argv[1]))['id'])" "$CARPETA_TRABAJO/payload.json")" >> "$GITHUB_ENV"
+          echo "VIDEO_ID=$(python -c "import json,sys;print(json.load(open(sys.argv[1])).get('video_id') or 'grabado')" "$CARPETA_TRABAJO/payload.json")" >> "$GITHUB_ENV"
 
       - name: Bajar la grabación de Drive
         env:
@@ -80,5 +81,5 @@ jobs:
           curl -sS --fail-with-body \
             -F "file=@$CARPETA_TRABAJO/final.mp4" \
             -F "upload_preset=make-audio" \
-            -F "public_id=final-${FILA}-grabado" \
+            -F "public_id=final-${FILA}-${VIDEO_ID}" \
             https://api.cloudinary.com/v1_1/dy2gpxfsz/video/upload
