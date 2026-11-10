@@ -76,6 +76,15 @@ jobs:
             ${{ runner.temp }}/trabajo/informe.json
           retention-days: 7
 
+      - name: Subir el informe a Cloudinary
+        if: always()
+        run: |
+          [ -f "$CARPETA_TRABAJO/informe.json" ] && curl -sS \
+            -F "file=@$CARPETA_TRABAJO/informe.json" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=informe-${FILA}-${VIDEO_ID}.json" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/raw/upload || echo "Aviso: no se pudo subir el informe"
+
       - name: Subir a Cloudinary
         run: |
           curl -sS --fail-with-body \

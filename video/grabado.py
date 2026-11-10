@@ -549,6 +549,8 @@ def componer(datos):
     informe = {"id": datos.get("id"), "duracion_original": round(total, 2), "duracion_final": round(final_t, 2),
                "parecido_con_guion": round(parecido, 3), "transcripcion_final": " ".join(p["w"] for p in pal2),
                "oraciones": [{"texto": o, "parecido": round(u[2], 3) if u else 0} for o, u in zip(orac, ubic)],
+               "tramos": [[round(a, 2), round(b, 2), k] for a, b, k in tramos],
+               "duracion_corte": float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(corte)], capture_output=True, text=True).stdout or 0),
                "avisos": avisos, "revisar": bool(avisos) or parecido < 0.85}
     (TRABAJO / "informe.json").write_text(json.dumps(informe, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(informe, ensure_ascii=False, indent=1))
