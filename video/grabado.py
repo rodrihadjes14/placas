@@ -264,7 +264,7 @@ def tiempos_grafico(g, s, e, pal, avisos):
             ti = b(m.group(1) if m else None, x, min(e - 0.4, s + 0.2 + 0.28 * i))
             el.append(max(s + 0.1, ti - 0.1))
             x = ti
-        return {"el": el}, g
+        return adelantar({"el": el}, s, e), g
     if tipo == "tachado":
         t = {"entra": s + 0.08, "sello": b(g.get("cuando_sello") or g.get("sello"), s, s + 0.5)}
         t["sello"] = min(max(t["sello"] - 0.1, s + 0.3), e - 0.4)
@@ -300,7 +300,18 @@ def tiempos_grafico(g, s, e, pal, avisos):
     else:
         avisos.append(f"Tipo de gráfico desconocido: {tipo}")
         return None, g
-    return t, g
+    return adelantar(t, s, e), g
+
+
+def adelantar(t, s, e):
+    """Ningún elemento entra en el último tramo de su gráfico: si su palabra se dice al final, aparece un poco antes,
+    para que se llegue a ver antes de que cambie el gráfico."""
+    tope = max(s + 0.2, e - 1.3)
+    if isinstance(t, dict):
+        return {k: adelantar(v, s, e) for k, v in t.items()}
+    if isinstance(t, list):
+        return [adelantar(v, s, e) for v in t]
+    return min(t, tope) if isinstance(t, (int, float)) else t
 
 
 def linea_de_tiempo(datos, pal, lapsos, total):
