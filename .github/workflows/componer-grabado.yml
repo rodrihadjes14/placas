@@ -38,16 +38,26 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Instalar herramientas
-        timeout-minutes: 12
+      # La instalación va en pasos separados y con tope de tiempo: el 11/11/2026 quedó colgada 40 minutos sin avisar.
+      - name: Instalar ffmpeg
+        timeout-minutes: 6
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          set -x
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          pip install -q --progress-bar off playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests
-          python -m playwright install --with-deps chromium
+          APT="-o Acquire::ForceIPv4=true -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60"
+          sudo apt-get $APT update -qq || true
+          sudo apt-get $APT install -y -qq --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Instalar bibliotecas de Python
+        timeout-minutes: 8
+        run: pip install -q --progress-bar off playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests
+
+      - name: Instalar el navegador
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: python -m playwright install --with-deps chromium
 
       - name: Preparar payload
         env:
