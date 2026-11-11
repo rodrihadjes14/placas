@@ -123,10 +123,16 @@ def ubicar_oraciones(orac, pal):
         else:
             r, i, largo = max(cands)
         # bordes: si el tramo dejó afuera la primera o la última palabra de la oración, se la suma
-        if i > 0 and tkk[i] != obj[0] and tkk[i - 1] == obj[0]:
-            i, largo = i - 1, largo + 1
-        if i + largo < limite and tkk[i + largo - 1] != obj[-1] and tkk[i + largo] == obj[-1]:
-            largo += 1
+        if tkk[i] != obj[0]:
+            for j in (1, 2, 3):
+                if i - j >= 0 and tkk[i - j] == obj[0]:
+                    i, largo = i - j, largo + j
+                    break
+        if tkk[i + largo - 1] != obj[-1]:
+            for j in (1, 2, 3):
+                if i + largo - 1 + j < limite and tkk[i + largo - 1 + j] == obj[-1]:
+                    largo += j
+                    break
         res[k] = (i, i + largo, r)
         limite = i
     return res
