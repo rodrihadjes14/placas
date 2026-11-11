@@ -1,0 +1,62 @@
+{
+ "etiqueta": "ACCIDENTE IN ITÍNERE · ART",
+ "gancho": {
+  "chica": "YENDO AL LABURO",
+  "grande": "TE DESVIASTE DOS CUADRAS"
+ },
+ "graficos": [
+  {
+   "ancla": "La ART suele usar",
+   "tipo": "documento",
+   "titulo": "TU ACCIDENTE",
+   "sello": "RECHAZADO",
+   "cuando_sello": "para rechazarte"
+  },
+  {
+   "ancla": "Ese accidente se llama",
+   "tipo": "libre",
+   "chica": "DE CASA AL TRABAJO",
+   "svg": "<svg viewBox='0 0 940 680'><g data-efecto='pop'><rect x='20' y='320' width='190' height='160' rx='24' fill='#1C1C1C'/><text x='115' y='418' text-anchor='middle' font-size='48' fill='#FFFFFF'>CASA</text></g><g data-efecto='pop'><rect x='720' y='40' width='210' height='160' rx='24' fill='#1C1C1C'/><text x='825' y='138' text-anchor='middle' font-size='44' fill='#FFFFFF'>TRABAJO</text></g><path data-efecto='dibuja' d='M210 400 H330' fill='none' stroke='#1C1C1C' stroke-width='18' stroke-linecap='round'/><path data-efecto='dibuja' d='M330 400 V230 H560 V400' fill='none' stroke='#FFD21F' stroke-width='22' stroke-linecap='round' stroke-linejoin='round'/><text data-efecto='aparece' x='445' y='200' text-anchor='middle' font-size='46' fill='#8A857C'>DESVÍO</text><path data-efecto='dibuja' d='M560 400 H825 V200' fill='none' stroke='#1C1C1C' stroke-width='18' stroke-linecap='round' stroke-linejoin='round'/><text data-efecto='sube' data-cuando='in itínere y' x='470' y='560' text-anchor='middle' font-size='88' fill='#1C1C1C'>IN ITÍNERE</text><g data-efecto='pop' data-cuando='también lo cubre'><rect x='170' y='596' width='600' height='80' rx='16' fill='#FFD21F'/><text x='470' y='654' text-anchor='middle' font-size='52' fill='#1C1C1C'>LA ART LO CUBRE</text></g></svg>",
+   "respaldo": {
+    "tipo": "lista",
+    "titulo": "SE LLAMA *IN ITÍNERE*",
+    "items": [
+     {
+      "texto": "LA ART LO CUBRE",
+      "icono": "cruz",
+      "cuando": "también lo cubre"
+     }
+    ]
+   }
+  },
+  {
+   "ancla": "Si te lo rechazan",
+   "tipo": "mito",
+   "mito": "RECHAZADO POR EL DESVÍO",
+   "verdad": "NO LO DES POR CIERTO",
+   "cuando_verdad": "no lo des"
+  }
+ ],
+ "cierre": [
+  {
+   "ancla": "¿A vos te rechazaron",
+   "chica": "¿TE RECHAZARON",
+   "grande": "POR DESVIARTE?"
+  },
+  {
+   "ancla": "Respondé sí o no",
+   "chica": "RESPONDÉ EN LOS COMENTARIOS",
+   "grande": "¿SÍ O NO?"
+  },
+  {
+   "ancla": "si te pasó a",
+   "chica": "¿TE PASÓ A VOS?",
+   "grande": "ESCRIBINOS POR WHATSAPP",
+   "pie": "LINK DEL PERFIL"
+  }
+ ],
+ "id": "T111",
+ "guion": "Te chocaron yendo al laburo, pero te desviaste dos cuadras. La ART suele usar ese desvío para rechazarte el accidente. Ese accidente se llama in itínere y la ART también lo cubre. Si te lo rechazan por el desvío, no lo des por cierto. ¿A vos te rechazaron un accidente por desviarte del camino? Respondé sí o no en los comentarios y, si te pasó a vos, escribinos por WhatsApp desde el link del perfil.",
+ "video_id": "tapa-prueba",
+ "solo_tapa": true
+}

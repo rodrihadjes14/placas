@@ -614,6 +614,18 @@ def _componer(datos):
             avisos.append(f"No se encontró la oración {k + 1}: {orac[k]}")
         elif u[2] < 0.7:
             avisos.append(f"La oración {k + 1} no coincide bien con el guion ({u[2]:.0%}): {orac[k]}")
+    tapa_t = None
+    try:                                               # la tapa nunca frena el video
+        import tapa
+        etapa("Armando la tapa")
+        fin_gancho = tl["bloques"][0]["e"] if datos.get("gancho") and tl["bloques"] else min(final_t, 3.0)
+        tapa_t = tapa.armar(corte, 0.0, fin_gancho, datos, TRABAJO, W, H)
+    except Exception as err:
+        avisos.append(f"No se pudo armar la tapa: {str(err)[:200]}")
+    if datos.get("solo_tapa"):                         # solo se pidió la tapa de un video que ya existe
+        (TRABAJO / "informe.json").write_text(json.dumps({"id": datos.get("id"), "solo_tapa": True, "tapa_segundo": tapa_t,
+                                                         "etapas": ETAPAS, "avisos": avisos}, ensure_ascii=False, indent=1), encoding="utf-8")
+        return
     n = round(final_t * FPS)
     hay = bool(tl["escenas"])
     f1, f2 = (round(tl["pip"][0] * FPS), min(n, round(tl["pip"][1] * FPS))) if hay else (n, n)
@@ -629,7 +641,7 @@ def _componer(datos):
                "parecido_con_guion": round(parecido, 3), "transcripcion_final": " ".join(p["w"] for p in pal2),
                "oraciones": [{"texto": o, "parecido": round(u[2], 3) if u else 0} for o, u in zip(orac, ubic)],
                "tramos": [[round(a, 2), round(b, 2), k] for a, b, k in tramos],
-               "duracion_corte": duracion_de(corte),
+               "duracion_corte": duracion_de(corte), "tapa_segundo": tapa_t,
                "etapas": ETAPAS, "avisos": avisos, "revisar": bool(avisos) or parecido < 0.85}
     (TRABAJO / "informe.json").write_text(json.dumps(informe, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(informe, ensure_ascii=False, indent=1))

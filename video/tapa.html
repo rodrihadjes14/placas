@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<!-- Tapa (cover) del Reel grabado (video/tapa.py): un cuadro del gancho de fondo, la etiqueta del tema arriba y el
+     gancho en letras grandes abajo. Todo queda dentro de la franja central 3:4 (de 240 a 1680 px de alto), que es
+     lo que muestra la grilla del perfil. setData({fondo, etiqueta, chica, grande}). -->
+<style>
+@font-face{font-family:BG;font-weight:200 800;src:url(fuentes/BricolageGrotesque-variable.woff2) format("woff2")}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#1C1C1C;font-family:BG,sans-serif;font-weight:800;color:#111}
+#fondo{position:absolute;inset:0;background-size:cover;background-position:center}
+#velo{position:absolute;inset:0;background:linear-gradient(180deg,#1c1c1c40 0,#1c1c1c00 22%,#1c1c1c00 52%,#1c1c1c99 100%)}
+#chip{position:absolute;left:0;top:286px;width:1080px;display:flex;justify-content:center}
+#chip span{background:#fff;font-size:56px;line-height:1.1;letter-spacing:.5px;padding:14px 30px;border-radius:12px;white-space:nowrap;box-shadow:0 8px 0 #1c1c1c40}
+#bloque{position:absolute;left:0;bottom:290px;width:1080px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.chica{background:#fff;font-size:66px;line-height:1.05;padding:12px 28px;border-radius:10px;white-space:nowrap;box-shadow:0 8px 0 #1c1c1c40;margin-bottom:6px}
+.grande{background:#FFD21F;line-height:1;padding:16px 32px;border-radius:12px;white-space:nowrap;box-shadow:0 8px 0 #1c1c1c40}
+</style></head><body>
+<div id="fondo"></div><div id="velo"></div><div id="chip"></div><div id="bloque"></div>
+<script>
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function repartir(pal,n){                       // parte las palabras en n renglones lo más parejos posible
+ if(n<=1||pal.length<=1)return [pal.join(' ')];
+ let mejor=null;
+ const rec=(i,quedan,act)=>{if(quedan===1){const r=[...act,pal.slice(i).join(' ')],m=Math.max(...r.map(x=>x.length));if(!mejor||m<mejor.m)mejor={m,r};return}
+  for(let j=i+1;j<=pal.length-(quedan-1);j++)rec(j,quedan-1,[...act,pal.slice(i,j).join(' ')])};
+ rec(0,Math.min(n,pal.length),[]);return mejor.r}
+function achicar(el,max,min){let f=parseFloat(getComputedStyle(el).fontSize);while(el.offsetWidth>max&&f>min){f-=2;el.style.fontSize=f+'px'}return f}
+window.setData=async d=>{await document.fonts.ready;
+ document.getElementById('fondo').style.backgroundImage=`url("${d.fondo}")`;
+ const chip=document.getElementById('chip');
+ if(d.etiqueta){chip.innerHTML=`<span>${esc(d.etiqueta)}</span>`;achicar(chip.firstChild,940,30)}
+ const b=document.getElementById('bloque'),pal=String(d.grande||'').trim().split(/\s+/).filter(Boolean);
+ let elegido=null;
+ for(let n=1;n<=3;n++){const r=repartir(pal,n);b.innerHTML=r.map(x=>`<div class="grande" style="font-size:136px">${esc(x)}</div>`).join('');
+  const f=Math.min(...[...b.children].map(e=>achicar(e,960,60)));elegido={r,f};if(f>=108||n>=pal.length)break}
+ b.innerHTML=(d.chica?`<div class="chica">${esc(d.chica)}</div>`:'')+elegido.r.map(x=>`<div class="grande" style="font-size:${elegido.f}px">${esc(x)}</div>`).join('');
+ if(d.chica)achicar(b.firstChild,960,34);
+ await new Promise(r=>{const i=new Image();i.onload=i.onerror=r;i.src=d.fondo});return elegido.f};
+</script></body></html>

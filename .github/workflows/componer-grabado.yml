@@ -9,7 +9,7 @@ on:
   repository_dispatch:
     types: [componer-grabado]
   push:
-    branches: [reel-grabado]
+    branches: [reel-grabado, tapa-reel]
     paths: ['video/pruebas/*.json']
 
 concurrency:
@@ -43,7 +43,7 @@ jobs:
       - name: Instalar bibliotecas de Python y ffmpeg
         timeout-minutes: 8
         run: |
-          pip install -q --progress-bar off playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests imageio-ffmpeg
+          pip install -q --progress-bar off playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests imageio-ffmpeg "opencv-python-headless<5" "mediapipe==0.10.32"
           mkdir -p "$RUNNER_TEMP/bin"
           ln -sf "$(python -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')" "$RUNNER_TEMP/bin/ffmpeg"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
@@ -83,6 +83,7 @@ jobs:
           name: reel-${{ env.FILA }}
           path: |
             ${{ runner.temp }}/trabajo/final.mp4
+            ${{ runner.temp }}/trabajo/portada.jpg
             ${{ runner.temp }}/trabajo/informe.json
           retention-days: 7
 
@@ -95,8 +96,20 @@ jobs:
             -F "public_id=informe-${FILA}-${VIDEO_ID}.json" \
             https://api.cloudinary.com/v1_1/dy2gpxfsz/raw/upload || echo "Aviso: no se pudo subir el informe"
 
+      # Tapa del Reel (video/tapa.py): el publicador la busca como final-<ID>-<VIDEO_ID>-portada.jpg
+      - name: Subir la tapa a Cloudinary
+        if: always()
+        run: |
+          [ -f "$CARPETA_TRABAJO/portada.jpg" ] && curl -sS \
+            -F "file=@$CARPETA_TRABAJO/portada.jpg" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=final-${FILA}-${VIDEO_ID}-portada" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/image/upload || echo "Aviso: no hay tapa para subir"
+
       - name: Subir a Cloudinary
         run: |
+          # con "solo_tapa" no hay video nuevo: el que ya estaba publicado en Cloudinary queda como está
+          [ -f "$CARPETA_TRABAJO/final.mp4" ] || { echo "Sin video nuevo (solo se pidió la tapa)"; exit 0; }
           curl -sS --fail-with-body \
             -F "file=@$CARPETA_TRABAJO/final.mp4" \
             -F "upload_preset=make-audio" \
