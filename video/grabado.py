@@ -544,21 +544,46 @@ def sumar_audio(video, corte, tl, datos, destino):
     correr(*orden, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", destino)
 
 
+ETAPAS = []
+
+
+def etapa(nombre, **extra):
+    """Deja constancia de por dónde va el montaje en informe.json: si se corta o se cuelga, se sabe en qué paso."""
+    import time
+    ETAPAS.append(dict({"etapa": nombre, "hora": time.strftime("%H:%M:%S", time.gmtime())}, **extra))
+    print(nombre, flush=True)
+    try:
+        (TRABAJO / "informe.json").write_text(json.dumps({"incompleto": True, "etapas": ETAPAS}, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def componer(datos):
     TRABAJO.mkdir(parents=True, exist_ok=True)
+    try:
+        _componer(datos)
+    except BaseException as err:
+        import traceback
+        etapa("ERROR", error=str(err)[:500], traza=traceback.format_exc()[-1500:])
+        raise
+
+
+def _componer(datos):
     origen = datos.get("video") or os.environ.get("ORIGEN")
     orac = oraciones(datos["guion"])
-    print("Preparando la grabación")
+    etapa("Preparando la grabación")
     src = TRABAJO / "src.mp4"
     correr("ffmpeg", "-v", "error", "-y", "-i", origen, "-vf", f"scale={SW}:{SH}:force_original_aspect_ratio=increase,crop={SW}:{SH}",
            "-r", FPS, "-c:v", "libx264", "-preset", "veryfast", "-crf", 15, "-c:a", "aac", "-b:a", "192k", src)
     correr("ffmpeg", "-v", "error", "-y", "-i", src, "-ac", 1, "-ar", 16000, TRABAJO / "src.wav")
     total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(src)],
                                  capture_output=True, text=True).stdout)
-    print("Transcribiendo y ubicando las oraciones del guion")
+    etapa("Transcribiendo y ubicando las oraciones del guion", duracion_original=round(total, 2))
     pal = transcribir(TRABAJO / "src.wav")
     ubic = ubicar_oraciones(orac, pal)
     tramos = tramos_de_corte(ubic, pal, silencios(TRABAJO / "src.wav"), total)
+    etapa("Cortando", tramos=[[round(a, 2), round(b, 2), k] for a, b, k in tramos],
+          oraciones=[[pal[u[0]]["w"], pal[u[1] - 1]["w"], round(u[2], 2)] if u else None for u in ubic])
     corte, voz = TRABAJO / "corte.mp4", TRABAJO / "voz.wav"
     lapsos = cortar(src, tramos, corte, voz)
     correr("ffmpeg", "-v", "error", "-y", "-i", voz, "-ac", 1, "-ar", 16000, TRABAJO / "corte.wav")
@@ -589,10 +614,11 @@ def componer(datos):
     n = round(final_t * FPS)
     hay = bool(tl["escenas"])
     f1, f2 = (round(tl["pip"][0] * FPS), min(n, round(tl["pip"][1] * FPS))) if hay else (n, n)
-    print("Dibujando gráficos, textos y subtítulos")
+    etapa("Dibujando gráficos, textos y subtítulos", cuadros=n, cuadros_con_silueta=max(0, f2 - f1))
     dibujar_capas(tl, n, f1, min(n, f2 + 14) if hay else n)
-    print("Componiendo")
+    etapa("Componiendo")
     componer_cuadros(corte, tl, lapsos, n, f1, f2, TRABAJO / "mudo.mp4")
+    etapa("Sumando el audio")
     sumar_audio(TRABAJO / "mudo.mp4", voz, tl, datos, TRABAJO / "final.mp4")
     if abs(duracion_de(TRABAJO / "final.mp4") - final_t) > 0.3:
         raise RuntimeError("El video final no dura lo que debería")
@@ -601,7 +627,7 @@ def componer(datos):
                "oraciones": [{"texto": o, "parecido": round(u[2], 3) if u else 0} for o, u in zip(orac, ubic)],
                "tramos": [[round(a, 2), round(b, 2), k] for a, b, k in tramos],
                "duracion_corte": duracion_de(corte),
-               "avisos": avisos, "revisar": bool(avisos) or parecido < 0.85}
+               "etapas": ETAPAS, "avisos": avisos, "revisar": bool(avisos) or parecido < 0.85}
     (TRABAJO / "informe.json").write_text(json.dumps(informe, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(informe, ensure_ascii=False, indent=1))
 

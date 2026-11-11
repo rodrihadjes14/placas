@@ -1,0 +1,64 @@
+{
+ "id": "T113",
+ "video_id": "diag3",
+ "guion": "Tenés el acuerdo de la ART y la lapicera en la mano. Antes de firmar te falta saber una sola cosa. Tenés que saber qué te corresponde, porque muchas veces la ART ofrece mucho menos. Por eso antes lo miran un médico legista y un abogado. ¿La ART ya te ofreció un acuerdo? Respondé sí o no en los comentarios y, si te pasó a vos, escribinos por WhatsApp desde el link del perfil.",
+ "etiqueta": "ACUERDO CON LA ART",
+ "gancho": {
+  "chica": "ANTES DE FIRMAR",
+  "grande": "¿CUÁNTO TE CORRESPONDE DE VERDAD?"
+ },
+ "graficos": [
+  {
+   "ancla": "Antes de firmar te",
+   "tipo": "numero",
+   "chica": "ANTES DE FIRMAR",
+   "numero": "1",
+   "grande": "UNA SOLA COSA",
+   "cuando": "una sola cosa"
+  },
+  {
+   "ancla": "Tenés que saber qué",
+   "tipo": "tachado",
+   "icono": "documento",
+   "chica": "LO QUE TE OFRECE",
+   "grande": "LA ART",
+   "sello": "MUCHO MENOS",
+   "cuando_sello": "mucho menos"
+  },
+  {
+   "ancla": "Por eso antes lo",
+   "tipo": "lista",
+   "titulo": "ANTES LO *REVISAN*",
+   "items": [
+    {
+     "texto": "MÉDICO LEGISTA",
+     "icono": "cruz",
+     "cuando": "médico legista"
+    },
+    {
+     "texto": "ABOGADO",
+     "icono": "documento",
+     "cuando": "abogado"
+    }
+   ]
+  }
+ ],
+ "cierre": [
+  {
+   "ancla": "¿La ART ya te",
+   "chica": "¿LA ART YA TE OFRECIÓ",
+   "grande": "UN ACUERDO?"
+  },
+  {
+   "ancla": "Respondé sí o no",
+   "chica": "RESPONDÉ EN LOS COMENTARIOS",
+   "grande": "¿SÍ O NO?"
+  },
+  {
+   "ancla": "si te pasó a",
+   "chica": "¿TE PASÓ A VOS?",
+   "grande": "ESCRIBINOS POR WHATSAPP",
+   "pie": "LINK DEL PERFIL"
+  }
+ ]
+}

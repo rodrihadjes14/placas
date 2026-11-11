@@ -19,7 +19,7 @@ concurrency:
 jobs:
   componer:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: video
@@ -66,7 +66,7 @@ jobs:
       - name: Componer
         env:
           ORIGEN: ${{ runner.temp }}/trabajo/origen.mov
-        run: python grabado.py "$CARPETA_TRABAJO/payload.json"
+        run: timeout 30m python grabado.py "$CARPETA_TRABAJO/payload.json"
 
       - uses: actions/upload-artifact@v4
         with:
