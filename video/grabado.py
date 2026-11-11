@@ -106,10 +106,14 @@ def ubicar_oraciones(orac, pal):
     for k in range(len(orac) - 1, -1, -1):
         obj = fichas(orac[k])
         n, cands = len(obj), []
+        # una palabra transcripta que se parece a una de la oración ("respondes" por "respondé") cuenta como esa palabra
+        igual = {x: next((o for o in obj if x == o or (len(o) > 3 and difflib.SequenceMatcher(None, x, o).ratio() >= 0.75)), x)
+                 for x in set(tk[:limite])}
+        tkk = [igual[x] for x in tk[:limite]]
         for i in range(limite):
             for largo in {n, n - 1, n + 1, n - 2, n + 2}:
                 if largo >= 1 and i + largo <= limite:
-                    cands.append((difflib.SequenceMatcher(None, obj, tk[i:i + largo]).ratio(), i, largo))
+                    cands.append((difflib.SequenceMatcher(None, obj, tkk[i:i + largo]).ratio(), i, largo))
         if not cands:
             continue
         buenos = [c for c in cands if c[0] >= 0.8]
@@ -118,6 +122,11 @@ def ubicar_oraciones(orac, pal):
             r, i, largo = max((c for c in buenos if tarde - c[1] <= 2), key=lambda c: (c[0], c[1]))
         else:
             r, i, largo = max(cands)
+        # bordes: si el tramo dejó afuera la primera o la última palabra de la oración, se la suma
+        if i > 0 and tkk[i] != obj[0] and tkk[i - 1] == obj[0]:
+            i, largo = i - 1, largo + 1
+        if i + largo < limite and tkk[i + largo - 1] != obj[-1] and tkk[i + largo] == obj[-1]:
+            largo += 1
         res[k] = (i, i + largo, r)
         limite = i
     return res
@@ -132,9 +141,11 @@ def tramos_de_corte(ubic, pal, sil, total):
         a, b = pal[u[0]]["s"], pal[u[1] - 1]["e"]
         # El arranque y el final se llevan hasta la pausa más cercana: la transcripción puede marcar la primera
         # palabra antes de tiempo, o dejar afuera del tramo una palabra que entendió distinto que el guion.
+        # Arranque: de las pausas que ya venían sonando cuando la transcripción marca la primera palabra, la que termina
+        # más tarde (la transcripción suele marcar esa palabra antes de tiempo, y un ruido suelto antes de hablar parte
+        # la pausa en dos: si se toma la primera parte, el video arranca con un segundo de silencio).
         antes = [s for s in sil if s[0] <= a - 0.02 and a - 1.2 <= s[1] <= pal[u[0]]["e"] + 0.4 and s[1] >= piso - 0.2]
-        previas = [s[1] for s in antes if s[1] <= a + 0.25]
-        ini = ((max(previas) if previas else max(s[1] for s in antes)) - MARGEN_ANTES) if antes else a - 0.1
+        ini = (max(s[1] for s in antes) - MARGEN_ANTES) if antes else a - 0.1
         tope = pal[ubic[k + 1][0]]["s"] if k + 1 < len(ubic) and ubic[k + 1] else total
         despues = [s for s in sil if pal[u[1] - 1]["s"] <= s[0] <= b + 1.2 and s[0] <= tope + 0.2]
         posteriores = [s[0] for s in despues if s[0] >= b - 0.1]
