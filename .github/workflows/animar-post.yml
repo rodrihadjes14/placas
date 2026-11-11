@@ -46,7 +46,7 @@ jobs:
       - name: Instalar herramientas
         run: |
           pip install -q pillow
-          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; }
+          bash "$GITHUB_WORKSPACE/.github/instalar-ffmpeg.sh"
 
       - name: Renderizar y subir
         id: render

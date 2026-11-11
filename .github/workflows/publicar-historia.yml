@@ -82,9 +82,10 @@ jobs:
           PY
 
       - name: Instalar herramientas
+        timeout-minutes: 10
         run: |
           pip install -q playwright
-          python -m playwright install --with-deps chromium
+          bash "$GITHUB_WORKSPACE/.github/instalar-navegador.sh"
 
       - name: Generar la placa
         run: python historia/generar.py historia.json "${{ steps.datos.outputs.archivo }}"

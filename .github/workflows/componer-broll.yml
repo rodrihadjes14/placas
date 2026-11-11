@@ -30,11 +30,11 @@ jobs:
           node-version: '22'
 
       - name: Instalar herramientas
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
+          bash "$GITHUB_WORKSPACE/.github/instalar-ffmpeg.sh"
           pip install -q playwright "opencv-python-headless<5" "mediapipe==0.10.32"
-          python -m playwright install --with-deps chromium
+          bash "$GITHUB_WORKSPACE/.github/instalar-navegador.sh"
           npx --yes hyperframes@0.8.173 browser ensure
 
       - name: Componer

@@ -323,22 +323,39 @@ def ubicar_placas(placas, cara, zona, carpeta):
     return finales, sub_y
 
 
+def _info_ffmpeg(video):
+    """Lo que informa "ffmpeg -i" del archivo (sirve cuando no hay ffprobe)."""
+    return subprocess.run(["ffmpeg", "-hide_banner", "-i", str(video)], capture_output=True, text=True).stderr
+
+
 def duracion(video):
-    r = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(video)],
-        capture_output=True, text=True, check=True,
-    )
-    return float(r.stdout.strip())
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(video)],
+            capture_output=True, text=True, check=True,
+        )
+        return float(r.stdout.strip())
+    except (FileNotFoundError, ValueError, subprocess.CalledProcessError):
+        m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", _info_ffmpeg(video))
+        if not m:
+            raise
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
 
 
 def fps_video(video):
-    r = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate",
-         "-of", "default=nw=1:nk=1", str(video)],
-        capture_output=True, text=True, check=True,
-    )
-    num, _, den = r.stdout.strip().partition("/")
-    return float(num) / float(den or 1)
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate",
+             "-of", "default=nw=1:nk=1", str(video)],
+            capture_output=True, text=True, check=True,
+        )
+        num, _, den = r.stdout.strip().partition("/")
+        return float(num) / float(den or 1)
+    except (FileNotFoundError, ValueError, ZeroDivisionError, subprocess.CalledProcessError):
+        m = re.search(r"([\d.]+) fps", _info_ffmpeg(video))
+        if not m:
+            raise
+        return float(m.group(1))
 
 
 def detectar_cortes(video, esperados):

@@ -26,11 +26,11 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar herramientas
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
+          bash "$GITHUB_WORKSPACE/.github/instalar-ffmpeg.sh"
           pip install -q playwright "opencv-python-headless<5" "mediapipe==0.10.32"
-          python -m playwright install --with-deps chromium
+          bash "$GITHUB_WORKSPACE/.github/instalar-navegador.sh"
 
       - uses: actions/setup-node@v4
         if: github.event.client_payload.animado

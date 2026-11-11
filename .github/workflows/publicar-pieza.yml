@@ -115,7 +115,8 @@ jobs:
                   print("Se usa el video armado al graficar")
           if not url:
               subprocess.run("pip install -q pillow", shell=True, check=True)
-              subprocess.run("command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; }", shell=True, check=True)
+              subprocess.run('bash "$GITHUB_WORKSPACE/.github/instalar-ffmpeg.sh"', shell=True, check=True)
+              os.environ["PATH"] = os.environ.get("RUNNER_TEMP", "") + "/bin:" + os.environ["PATH"]
               res = subprocess.run([sys.executable, "animado/animar_post.py", pieza["id"], pieza["media"][0], titulo],
                                    check=True, capture_output=True, text=True)
               print(res.stderr)
