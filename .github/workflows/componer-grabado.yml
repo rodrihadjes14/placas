@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   componer:
-    runs-on: ubuntu-latest
+    # Versión fija: con ubuntu-latest (que desde octubre de 2026 pasa a Ubuntu 26) la instalación quedó colgada el 11/11/2026
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     defaults:
       run:
@@ -38,10 +39,14 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar herramientas
+        timeout-minutes: 12
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
+          set -x
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg
-          pip install -q playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests
+          pip install -q --progress-bar off playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests
           python -m playwright install --with-deps chromium
 
       - name: Preparar payload
