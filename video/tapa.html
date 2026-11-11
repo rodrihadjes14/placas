@@ -2,7 +2,7 @@
 <html><head><meta charset="utf-8">
 <!-- Tapa (cover) del Reel grabado (video/tapa.py): un cuadro del gancho de fondo, la etiqueta del tema arriba y el
      gancho en letras grandes abajo. Todo queda dentro de la franja central 3:4 (de 240 a 1680 px de alto), que es
-     lo que muestra la grilla del perfil. setData({fondo, etiqueta, chica, grande}). -->
+     lo que muestra la grilla del perfil. setData({etiqueta, chica, grande}) y después setFondo(url, arriba). -->
 <style>
 @font-face{font-family:BG;font-weight:200 800;src:url(fuentes/BricolageGrotesque-variable.woff2) format("woff2")}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -26,7 +26,6 @@ function repartir(pal,n){                       // parte las palabras en n rengl
  rec(0,Math.min(n,pal.length),[]);return mejor.r}
 function achicar(el,max,min){let f=parseFloat(getComputedStyle(el).fontSize);while(el.offsetWidth>max&&f>min){f-=2;el.style.fontSize=f+'px'}return f}
 window.setData=async d=>{await document.fonts.ready;
- document.getElementById('fondo').style.backgroundImage=`url("${d.fondo}")`;
  const chip=document.getElementById('chip');
  if(d.etiqueta){chip.innerHTML=`<span>${esc(d.etiqueta)}</span>`;achicar(chip.firstChild,940,30)}
  const b=document.getElementById('bloque'),pal=String(d.grande||'').trim().split(/\s+/).filter(Boolean);
@@ -35,5 +34,10 @@ window.setData=async d=>{await document.fonts.ready;
   const f=Math.min(...[...b.children].map(e=>achicar(e,960,60)));elegido={r,f};if(f>=108||n>=pal.length)break}
  b.innerHTML=(d.chica?`<div class="chica">${esc(d.chica)}</div>`:'')+elegido.r.map(x=>`<div class="grande" style="font-size:${elegido.f}px">${esc(x)}</div>`).join('');
  if(d.chica)achicar(b.firstChild,960,34);
- await new Promise(r=>{const i=new Image();i.onload=i.onerror=r;i.src=d.fondo});return elegido.f};
+ const r=b.getBoundingClientRect();return {letra:elegido.f,arriba:r.top,alto:r.height,bajo_etiqueta:chip.getBoundingClientRect().bottom}};
+// El fondo se pone después, cuando ya se sabe cuánto lugar ocupa el texto. Con arriba=true el bloque del gancho sube
+// (queda debajo de la etiqueta) para no tapar la cara cuando el abogado quedó bajo en el cuadro.
+window.setFondo=async(url,arriba)=>{document.getElementById('fondo').style.backgroundImage=`url("${url}")`;
+ if(arriba){const b=document.getElementById('bloque');b.style.bottom='auto';b.style.top=(document.getElementById('chip').getBoundingClientRect().bottom+34)+'px'}
+ await new Promise(r=>{const i=new Image();i.onload=i.onerror=r;i.src=url})};
 </script></body></html>

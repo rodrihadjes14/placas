@@ -68,8 +68,25 @@ def elegir_instante(video, desde, hasta, trabajo):
     return elegido
 
 
-def armar(video, desde, hasta, datos, trabajo, ancho=1080, alto=1920):
-    """Arma portada.jpg a partir del video ya cortado. Devuelve el segundo elegido."""
+def cara_en(imagen, trabajo):
+    """Dónde está la cara en la imagen: (alto de la frente, alto del mentón), como fracción del alto. None si no se ve."""
+    import mediapipe as mp
+    import numpy as np
+    from mediapipe.tasks import python as mpt
+    from mediapipe.tasks.python import vision
+    detector = vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
+        base_options=mpt.BaseOptions(model_asset_path=str(trabajo / "face_landmarker.task")), num_faces=1))
+    r = detector.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(np.asarray(imagen.convert("RGB")))))
+    if not r.face_landmarks:
+        return None
+    ys = [p.y for p in r.face_landmarks[0]]
+    return min(ys), max(ys)
+
+
+def armar(video, desde, hasta, datos, trabajo, ancho=1080, alto=1920, zoom_base=ZOOM):
+    """Arma portada.jpg a partir del video ya cortado. Devuelve el segundo elegido.
+    El encuadre se ajusta a la cara: si el abogado quedó bajo en el cuadro, se acerca la imagen para que el mentón
+    quede por encima del texto del gancho; si ni así alcanza, el gancho sube y va debajo de la etiqueta."""
     import subprocess
     trabajo = pathlib.Path(trabajo)
     t = elegir_instante(video, desde, hasta, trabajo)
@@ -77,11 +94,8 @@ def armar(video, desde, hasta, datos, trabajo, ancho=1080, alto=1920):
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", str(video), "-frames:v", "1", str(crudo)], check=True)
     src = Image.open(crudo).convert("RGB")
     k = src.width / ancho
-    w0, h0 = ancho / ZOOM, alto / ZOOM
-    x0, y0 = (ancho - w0) / 2, alto - h0
-    fondo = trabajo / "tapa-fondo.jpg"
-    src.resize((ancho, alto), Image.LANCZOS, box=(x0 * k, y0 * k, (x0 + w0) * k, (y0 + h0) * k)).save(fondo, quality=95)
     gancho = datos.get("tapa") or datos.get("gancho") or {}
+    fondo = trabajo / "tapa-fondo.jpg"
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         try:
@@ -90,8 +104,28 @@ def armar(video, desde, hasta, datos, trabajo, ancho=1080, alto=1920):
             nav = p.chromium.launch(channel="chrome", args=["--allow-file-access-from-files"])
         pag = nav.new_page(viewport={"width": ancho, "height": alto})
         pag.goto(f"file://{AQUI / 'tapa.html'}")
-        pag.evaluate("d => setData(d)", {"fondo": f"file://{fondo}", "etiqueta": datos.get("etiqueta", ""),
-                                          "chica": gancho.get("chica", ""), "grande": gancho.get("grande", "")})
+        m = pag.evaluate("d => setData(d)", {"etiqueta": datos.get("etiqueta", ""), "chica": gancho.get("chica", ""),
+                                             "grande": gancho.get("grande", "")})
+        z, arriba = zoom_base, False
+        try:
+            cara = cara_en(src, trabajo)
+        except Exception as e:
+            cara = None
+            print(f"Aviso: no se pudo ubicar la cara para encuadrar la tapa ({e})")
+        if cara:
+            frente, menton = cara[0] * src.height, cara[1] * src.height
+            en_tapa = lambda y, zz: alto - (src.height - y) * zz / k          # alto en la tapa de un punto de la grabación
+            if en_tapa(menton, z) > m["arriba"] - 36:                          # el texto taparía la cara
+                hace_falta = (alto - (m["arriba"] - 36)) * k / max(1.0, src.height - menton)
+                if hace_falta <= zoom_base * 1.3 and en_tapa(frente, hace_falta) - 0.35 * (menton - frente) * hace_falta / k > m["bajo_etiqueta"]:
+                    z = hace_falta
+                else:
+                    arriba = True
+            print(f"Tapa: acercamiento {z:.2f}, gancho {'arriba' if arriba else 'abajo'}")
+        w0, h0 = ancho / z, alto / z
+        x0, y0 = (ancho - w0) / 2, alto - h0
+        src.resize((ancho, alto), Image.LANCZOS, box=(x0 * k, y0 * k, (x0 + w0) * k, (y0 + h0) * k)).save(fondo, quality=95)
+        pag.evaluate("([u, a]) => setFondo(u, a)", [f"file://{fondo}", arriba])
         pag.wait_for_timeout(300)
         pag.screenshot(path=str(trabajo / "portada.jpg"), type="jpeg", quality=93)
         nav.close()
