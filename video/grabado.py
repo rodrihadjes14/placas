@@ -210,9 +210,10 @@ def cortar(origen, tramos, destino, audio):
 
 
 def duracion_de(archivo):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(archivo)],
-                       capture_output=True, text=True).stdout.strip()
-    return float(r or 0)
+    """Duración en segundos. Se lee de lo que informa ffmpeg (no hace falta ffprobe)."""
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(archivo)], capture_output=True, text=True).stderr
+    m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", r)
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else 0.0
 
 
 def palabras_del_guion(orac, pal, lapsos):
@@ -406,7 +407,10 @@ def dibujar_capas(tl, n, f1, f2):
     for capa in ("bg", "fg"):
         (TRABAJO / capa).mkdir(exist_ok=True)
     with sync_playwright() as p:
-        nav = p.chromium.launch(args=["--allow-file-access-from-files"])
+        try:
+            nav = p.chromium.launch(args=["--allow-file-access-from-files"])
+        except Exception:                     # sin el navegador de Playwright: el Chrome que ya trae el equipo
+            nav = p.chromium.launch(channel="chrome", args=["--allow-file-access-from-files"])
         for capa, cuadros in (("bg", range(f1, f2)), ("fg", range(n))):
             pag = nav.new_page(viewport={"width": W, "height": H})
             pag.goto(f"file://{AQUI / 'grabado.html'}?layer={capa}")
@@ -576,8 +580,7 @@ def _componer(datos):
     correr("ffmpeg", "-v", "error", "-y", "-i", origen, "-vf", f"scale={SW}:{SH}:force_original_aspect_ratio=increase,crop={SW}:{SH}",
            "-r", FPS, "-c:v", "libx264", "-preset", "veryfast", "-crf", 15, "-c:a", "aac", "-b:a", "192k", src)
     correr("ffmpeg", "-v", "error", "-y", "-i", src, "-ac", 1, "-ar", 16000, TRABAJO / "src.wav")
-    total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(src)],
-                                 capture_output=True, text=True).stdout)
+    total = duracion_de(src)
     etapa("Transcribiendo y ubicando las oraciones del guion", duracion_original=round(total, 2))
     pal = transcribir(TRABAJO / "src.wav")
     ubic = ubicar_oraciones(orac, pal)

@@ -38,26 +38,21 @@ jobs:
         with:
           python-version: '3.12'
 
-      # La instalación va en pasos separados y con tope de tiempo: el 11/11/2026 quedó colgada 40 minutos sin avisar.
-      - name: Instalar ffmpeg
-        timeout-minutes: 6
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          APT="-o Acquire::ForceIPv4=true -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60"
-          sudo apt-get $APT update -qq || true
-          sudo apt-get $APT install -y -qq --no-install-recommends ffmpeg
-          ffmpeg -version | head -1
-
-      - name: Instalar bibliotecas de Python
+      # Sin apt-get: el 11/11/2026 la instalación de ffmpeg con apt quedó colgada (40 minutos, sin avisar).
+      # ffmpeg viene dentro de un paquete de Python y el navegador se baja sin paquetes del sistema.
+      - name: Instalar bibliotecas de Python y ffmpeg
         timeout-minutes: 8
-        run: pip install -q --progress-bar off playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests
+        run: |
+          pip install -q --progress-bar off playwright numpy pillow faster-whisper "rembg[cpu]" google-auth requests imageio-ffmpeg
+          mkdir -p "$RUNNER_TEMP/bin"
+          ln -sf "$(python -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')" "$RUNNER_TEMP/bin/ffmpeg"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bin/ffmpeg" -version | head -1
 
       - name: Instalar el navegador
-        timeout-minutes: 8
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: python -m playwright install --with-deps chromium
+        timeout-minutes: 6
+        continue-on-error: true
+        run: python -m playwright install chromium
 
       - name: Preparar payload
         env:
