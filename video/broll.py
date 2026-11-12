@@ -44,6 +44,12 @@ SUB_MAX_PALABRAS = 3
 SUB_MAX_CARACTERES = 18
 OSCURECER = 0.18        # velo oscuro sobre el b-roll para que se lean el título y los subtítulos
 INTRO = 0.5             # segundos con el título solo antes de la voz: así el primer cuadro (la tapa) no lleva subtítulos
+# Todas las tomas salen con los mismos datos de color (12/11/2026). Los clips de la biblioteca vienen distintos (unos
+# sin datos de color, otros marcados bt709); si las tomas los heredan, ffmpeg 8 rearma los filtros del montaje final
+# cuando cambian a mitad del fondo y descarta cuadros: el video de T120 quedó de 14,7 s con un audio de 24,9 s y
+# se congelaba en el segundo 15.
+COLOR_FILTRO = "setparams=range=tv:colorspace=bt709:color_primaries=bt709:color_trc=bt709"
+COLOR_SALIDA = ["-color_range", "tv", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
 
 
 def bajar(origen, destino):
@@ -107,8 +113,9 @@ def armar_toma(i, toma):
     subprocess.run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{ss:.3f}", "-i", str(archivo),
         "-t", f"{largo:.3f}", "-an",
-        "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps={FPS},format=yuv420p",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", str(destino),
+        "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps={FPS},format=yuv420p,"
+               + COLOR_FILTRO,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", *COLOR_SALIDA, str(destino),
     ], check=True)
     # si el clip terminó antes, se estira el último cuadro hasta completar el largo pedido
     real = c.duracion(destino)
@@ -116,8 +123,9 @@ def armar_toma(i, toma):
         estirado = TRABAJO / f"toma-{i:02d}b.mp4"
         subprocess.run([
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(destino),
-            "-vf", f"tpad=stop_mode=clone:stop_duration={largo - real + 0.05:.3f}", "-t", f"{largo:.3f}",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", str(estirado),
+            "-vf", f"tpad=stop_mode=clone:stop_duration={largo - real + 0.05:.3f}," + COLOR_FILTRO,
+            "-t", f"{largo:.3f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", *COLOR_SALIDA, str(estirado),
         ], check=True)
         destino = estirado
     return destino
@@ -205,7 +213,8 @@ def componer_broll(datos):
     subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0",
                     "-i", str(concat), "-c", "copy", str(fondo)], check=True)
 
-    entradas = ["-i", str(fondo), "-i", str(audio)]
+    # -reinit_filter 0: aunque el fondo cambiara de datos a mitad de camino, los filtros no se rearman.
+    entradas = ["-reinit_filter", "0", "-i", str(fondo), "-i", str(audio)]
     filtros = [f"[0:v]setpts=PTS-STARTPTS,drawbox=x=0:y=0:w=iw:h=ih:color=black@{OSCURECER}:t=fill[v0]"]
     ultimo = "v0"
     if datos.get("billetes", True) and c.MONTO.search(titulo):
@@ -257,6 +266,10 @@ def componer_broll(datos):
         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-r", str(FPS),
         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{total:.2f}", str(salida),
     ], check=True)
+    # Control: la imagen tiene que durar lo mismo que el audio. Si quedó corta, la corrida falla y el video no se sube.
+    imagen = c.duracion_video(salida)
+    if imagen < total - 0.5:
+        raise SystemExit(f"El video quedó corto: {imagen:.1f} s de imagen para {total:.1f} s de audio")
     # Tapa: el primer cuadro (b-roll con el título, sin subtítulos porque la voz arranca después de INTRO).
     # TikTok muestra ese cuadro como portada por defecto.
     subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(salida),

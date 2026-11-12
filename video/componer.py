@@ -342,6 +342,17 @@ def duracion(video):
         return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
 
 
+def duracion_video(video):
+    """Duración de la pista de imagen sola (la de "duracion" es la del archivo, que puede ser la del audio)."""
+    solo = TRABAJO / "solo-imagen.mkv"
+    subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(video), "-map", "0:v:0", "-an",
+                    "-c", "copy", str(solo)], check=True)
+    try:
+        return duracion(solo)
+    finally:
+        solo.unlink(missing_ok=True)
+
+
 def fps_video(video):
     try:
         r = subprocess.run(
