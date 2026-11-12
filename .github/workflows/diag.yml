@@ -1,0 +1,44 @@
+name: Diagnóstico b-roll (temporal)
+on:
+  push:
+    branches: [diag-t120]
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: video
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar herramientas
+        timeout-minutes: 15
+        run: |
+          bash "$GITHUB_WORKSPACE/.github/instalar-ffmpeg.sh"
+          pip install -q playwright "opencv-python-headless<5" "mediapipe==0.10.32"
+          bash "$GITHUB_WORKSPACE/.github/instalar-navegador.sh"
+          npx --yes hyperframes@0.8.173 browser ensure
+      - name: Componer
+        env:
+          CARPETA_TRABAJO: ${{ runner.temp }}/trabajo
+        run: python broll.py pruebas/diag-t120.json
+      - name: Medir
+        if: always()
+        run: |
+          cd "${{ runner.temp }}/trabajo"
+          ls -la
+          for f in broll-*.mp4 toma-*.mp4 fondo.mp4 billetes.mov final.mp4; do
+            echo "== $f"
+            ffprobe -v error -show_entries format=duration,start_time:stream=codec_type,codec_name,profile,pix_fmt,color_range,color_space,time_base,start_time,duration,nb_frames,r_frame_rate -of compact "$f" || true
+          done
+          echo "== cuadros decodificados de fondo.mp4"
+          ffmpeg -nostdin -hide_banner -v warning -stats -i fondo.mp4 -f null - 2>&1 | tr '\r' '\n' | tail -25
+          echo "== paquetes de fondo.mp4 (pts cada 30)"
+          ffprobe -v error -select_streams v:0 -show_entries packet=pts_time,dts_time,flags -of csv=p=0 fondo.mp4 | awk 'NR%15==1'
+          cat tomas.txt
