@@ -1,0 +1,39 @@
+{
+ "id": "AD-02",
+ "video_id": "anuncio1",
+ "guion": "Volvés al laburo con dolor y el papel del alta ya está firmado. El alta no cierra tu reclamo. Si te quedaron secuelas, tenés derecho a que se evalúe tu incapacidad y a cobrar la indemnización que corresponde. El reclamo es contra la ART, así que tu trabajo no corre peligro. Nuestros médicos legistas revisan tu caso. ¿Te dieron el alta y seguís con dolor? Respondé sí o no en los comentarios y seguinos, cada semana un caso real con monto y lesión.",
+ "animado": {
+  "gancho": {
+   "chica": "alta médica",
+   "grande": "Volvés con dolor"
+  },
+  "claves": [
+   {
+    "chica": "lo que tenés que saber",
+    "grande": "el alta no cierra el reclamo",
+    "ancla": "El alta no cierra"
+   },
+   {
+    "chica": "tu trabajo no corre peligro",
+    "grande": "el reclamo es contra la ART",
+    "ancla": "El reclamo es contra"
+   }
+  ],
+  "cta": {
+   "chica": "un caso real por semana",
+   "grande": "Seguinos"
+  },
+  "broll": [
+   {
+    "ancla": "Si te quedaron secuelas",
+    "clip": "B12",
+    "url": "https://res.cloudinary.com/dy2gpxfsz/video/upload/broll/B12.mp4"
+   },
+   {
+    "ancla": "Nuestros médicos legistas revisan",
+    "clip": "B16",
+    "url": "https://res.cloudinary.com/dy2gpxfsz/video/upload/broll/B16.mp4"
+   }
+  ]
+ }
+}
