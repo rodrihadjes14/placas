@@ -22,7 +22,7 @@ Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento):
               Con "titulo_fijo": true el bloque del gancho queda arriba durante todo el video (título de los
               anuncios y Reels de caso) y no se muestran frases clave ni CTA.
     zoom      opcional, true por defecto: acerca el encuadre hasta dejar al abogado de la cadera para arriba (arranca
-              con el cuadro entero y en poco más de un segundo llega; después queda fijo). false lo apaga.
+              con el cuadro entero y en medio segundo llega, con curva en S y un whoosh; después queda fijo). false lo apaga.
     sfx       opcional, true por defecto.
     billetes  opcional, true por defecto: lluvia de billetes cuando el gancho trae un monto ("$ 23.000.000").
 
@@ -40,7 +40,8 @@ import componer as montaje
 W, H = 1080, 1920
 
 # Acercamiento (desde el 14/11/2026): el abogado se graba de cuerpo entero y el Reel lo muestra de la cadera para arriba.
-ZOOM_SEGUNDOS = 1.2           # lo que tarda el acercamiento, al empezar el video; después queda fijo
+ZOOM_SEGUNDOS = 0.5           # lo que tarda el acercamiento, al empezar el video; después queda fijo
+ZOOM_SONIDO = ZOOM_SEGUNDOS / 2   # instante donde cae el pico del whoosh: la mitad del acercamiento, que es donde va más rápido
 ZOOM_CABEZA = 670             # altura (px de 1920) donde queda la parte de arriba de la cabeza: deja lugar al texto
 ZOOM_CADERA = 1890            # altura donde queda la cadera: casi en el borde de abajo
 ZOOM_CADERA_EN_CABEZAS = 2.75 # el borde de abajo queda a 2,75 "cabezas" (como las mide detectar_persona) de la parte de arriba de la cabeza: cadera y arranque de las piernas
@@ -111,7 +112,8 @@ def acercar(entrada, voz, salida, zoom, fx, fy, ancho=W, alto=H):
         filtro = f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},setsar=1"
     else:
         t = f"min(t/{ZOOM_SEGUNDOS}\\,1)"
-        z = f"(1+{zoom - 1:.4f}*{t}*{t}*(3-2*{t}))"               # entra y frena suave
+        # curva en S: arranca despacio, acelera en el medio y frena al llegar (no es un movimiento parejo)
+        z = f"(1+{zoom - 1:.4f}*{t}*{t}*{t}*({t}*(6*{t}-15)+10))"
         filtro = (f"scale=w='2*trunc({ancho}*{z}/2)':h='2*trunc({alto}*{z}/2)':eval=frame:flags=bicubic,"
                   # x e y se calculan con el mismo zoom del instante (crop no se entera de que el cuadro cambió de tamaño)
                   f"crop={ancho}:{alto}:x='{ancho}*({z}-1)*{fx:.4f}':y='{alto}*({z}-1)*{fy:.4f}',setsar=1")
@@ -211,6 +213,7 @@ def _armar(datos, trabajo):
         # Dónde quedó la cara después del acercamiento: el texto y los subtítulos se ubican con eso, sin volver a
         # buscarla (al buscarla de nuevo sobre el video ya acercado puede confundirse con otra cosa).
         arriba = fy * (H - H / zoom)
+        para_montaje["_zoom_en"] = ZOOM_SONIDO           # el acercamiento lleva su whoosh
         para_montaje["cara"] = {"cabeza": round((persona["cabeza"] - arriba) * zoom, 1),
                                 "menton": round(min(float(H), (persona["menton"] - arriba) * zoom), 1)}
     montaje.componer_texto(para_montaje, entrada, tiempos, montaje.duracion(entrada))

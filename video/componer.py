@@ -867,12 +867,13 @@ def semilla_sfx(datos):
     return int(m.group()) if m else sum(map(ord, str(datos.get("video_id", ""))))
 
 
-def eventos_sfx(bloques, broll, cortes, semilla):
+def eventos_sfx(bloques, broll, cortes, semilla, zoom_en=None):
     """Arma los efectos del Reel: [(segundo de inicio, archivo, volumen)]. Cada efecto se ubica para que su pico
     caiga en el momento visual:
       caja registradora  cuando aparece el gancho con el monto cobrado (Reels de caso real)
       click              cuando aparece cada uno de los demás bloques de texto
-      whoosh             cuando entra cada clip de b-roll y en cada corte de escena con acercamiento (zoom in);
+      whoosh             en el acercamiento del arranque, cuando entra cada clip de b-roll y en cada corte de escena
+                         con acercamiento (zoom in);
                          los alejamientos no llevan sonido, ni un corte tapado por un clip de b-roll
     Las tomas de cada tipo se alternan dentro del Reel y el punto de partida rota de un Reel a otro (semilla)."""
     tomas = tomas_sfx()
@@ -900,6 +901,8 @@ def eventos_sfx(bloques, broll, cortes, semilla):
         else:
             agregar("click", b["desde"] + 0.12)           # la línea chica salta a su lugar
     whooshes = [d for d, *_ in broll]
+    if zoom_en is not None:                              # acercamiento del arranque (completa.py)
+        whooshes.append(zoom_en)
     for i, c in enumerate(cortes):
         tapado = any(d - 0.1 <= c <= h + 0.1 for d, h, *_ in broll)
         if i % 2 == 0 and not tapado and all(abs(c - w) > 0.8 for w in whooshes):   # cortes pares: zoom in
@@ -1027,7 +1030,7 @@ def componer_texto(datos, entrada, palabras, total):
         filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
         ultimo = "vf"
     audio = "0:a?"
-    efectos = (eventos_sfx(bloques, broll, datos.get("_cortes_reales") or [], semilla_sfx(datos))
+    efectos = (eventos_sfx(bloques, broll, datos.get("_cortes_reales") or [], semilla_sfx(datos), datos.get("_zoom_en"))
                if datos.get("sfx", True) else [])
     if efectos:
         base = sum(1 for x in entradas if x == "-i")   # índice de la primera entrada de efectos

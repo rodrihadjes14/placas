@@ -614,6 +614,8 @@ def sumar_audio(video, corte, tl, datos, destino):
             agregar("click", b["s"] + 0.12)
         for e in tl["escenas"]:
             agregar("click", e["s"] + 0.15)
+        if tl.get("zoom_en") is not None:              # acercamiento del arranque (grabación de lejos)
+            agregar("whoosh", tl["zoom_en"])
         if tl["escenas"]:
             agregar("whoosh", tl["pip"][0] + 0.1)
             agregar("whoosh", tl["pip"][1] + 0.1)
@@ -722,6 +724,9 @@ def _componer(datos):
     palabras, parecido = palabras_del_guion(orac, pal2, lapsos)
     tl, avisos = linea_de_tiempo(datos, palabras, lapsos, final_t)
     tl["subs"] = subtitulos(palabras)
+    if acercamiento:
+        import completa
+        tl["zoom_en"] = completa.ZOOM_SONIDO
     tl["_pal"], tl["_avisos"] = palabras, avisos
     parecida = lambda x, y: difflib.SequenceMatcher(None, x, y).ratio() >= 0.6
     for k, o in enumerate(orac):                       # ¿el corte se comió el arranque o el final de una oración?
