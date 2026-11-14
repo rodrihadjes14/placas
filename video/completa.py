@@ -74,6 +74,26 @@ def silencios_de_voz(wav):
     return res
 
 
+ARRANQUE_MAX = 0.35           # segundos que se conservan, como mucho, antes de que la voz aparezca en las frecuencias altas
+
+
+def cuidar_arranques(tramos, tramos_volumen):
+    """Los sonidos con que suele empezar una oración ("Un", "Nuestros", "Lo que") casi no tienen energía por encima de
+    1 kHz, así que el detector de frecuencias altas puede marcar el arranque tarde y comerse la primera sílaba. El
+    arranque de cada oración se toma entonces del detector de volumen de grabado.py, que es el que venía funcionando,
+    sin adelantarse más de ARRANQUE_MAX segundos. Los finales, que es donde se colaban las respiraciones, quedan como
+    los marcó el detector de frecuencias altas."""
+    res, piso, vistas = [], 0.0, set()
+    for a, b, k in tramos:
+        if k not in vistas:
+            vistas.add(k)
+            viejo = next((x[0] for x in tramos_volumen if x[2] == k), a)
+            a = max(piso, min(a, max(viejo, a - ARRANQUE_MAX)))
+        res.append((a, b, k))
+        piso = b
+    return res
+
+
 def ajustar_finales(ubic, pal, sil):
     """La transcripción a veces estira la última palabra de una oración hasta después de la respiración. Acá se la
     termina donde de verdad se calla la voz, para que tramos_de_corte() corte ahí."""
@@ -116,6 +136,7 @@ def _armar(datos, trabajo):
     pausas = silencios_de_voz(trabajo / "src.wav")
     ajustar_finales(ubic, pal, pausas)
     tramos = g.tramos_de_corte(ubic, pal, pausas, total)
+    tramos = cuidar_arranques(tramos, g.tramos_de_corte(ubic, pal, g.silencios(trabajo / "src.wav"), total))
     g.etapa("Cortando", tramos=[[round(a, 2), round(b, 2), k] for a, b, k in tramos])
     corte, voz = trabajo / "corte.mp4", trabajo / "voz.wav"
     lapsos = g.cortar(src, tramos, corte, voz)
