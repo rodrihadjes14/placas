@@ -1,0 +1,34 @@
+{
+ "id": "AD-03",
+ "video_id": "anuncio1",
+ "guion": "Un corte, un esguince, una caída en la obra o un choque yendo al trabajo. No importa qué te pasó, importa qué secuela te quedó. Lo que cobrás de la ART se calcula con tu ingreso, tu edad y tu porcentaje de incapacidad. El mismo abogado que te atiende es el que lleva tu caso. Seguinos, cada semana un caso real con monto y lesión.",
+ "animado": {
+  "gancho": {
+   "chica": "accidente de trabajo",
+   "grande": "¿Cuánto cobrás?"
+  },
+  "claves": [
+   {
+    "chica": "se calcula con",
+    "grande": "ingreso, edad e incapacidad",
+    "ancla": "Lo que cobrás de"
+   }
+  ],
+  "cta": {
+   "chica": "un caso real por semana",
+   "grande": "Seguinos"
+  },
+  "broll": [
+   {
+    "ancla": "No importa qué te",
+    "clip": "B04",
+    "url": "https://res.cloudinary.com/dy2gpxfsz/video/upload/broll/B04.mp4"
+   },
+   {
+    "ancla": "El mismo abogado que",
+    "clip": "B26",
+    "url": "https://res.cloudinary.com/dy2gpxfsz/video/upload/broll/B26.mp4"
+   }
+  ]
+ }
+}
