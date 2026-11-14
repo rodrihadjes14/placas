@@ -205,6 +205,12 @@ def _armar(datos, trabajo):
             broll=len(animado.get("broll") or []), titulo_fijo=bool(animado.get("titulo_fijo")))
     para_montaje = {"id": datos.get("id"), "video_id": datos.get("video_id"), "animado": animado,
                     "sfx": datos.get("sfx", True), "billetes": datos.get("billetes", True)}
+    if persona and zoom > 1:
+        # Dónde quedó la cara después del acercamiento: el texto y los subtítulos se ubican con eso, sin volver a
+        # buscarla (al buscarla de nuevo sobre el video ya acercado puede confundirse con otra cosa).
+        arriba = fy * (H - H / zoom)
+        para_montaje["cara"] = {"cabeza": round((persona["cabeza"] - arriba) * zoom, 1),
+                                "menton": round(min(float(H), (persona["menton"] - arriba) * zoom), 1)}
     montaje.componer_texto(para_montaje, entrada, tiempos, montaje.duracion(entrada))
 
     final = trabajo / "final.mp4"
