@@ -1,0 +1,25 @@
+{
+ "id": "AD-01",
+ "video_id": "anuncio1",
+ "guion": "Estaba descargando mercadería cuando una caja le cayó sobre la rodilla izquierda. Sebastián es operario de depósito, se rompió los meniscos y cobró 23 millones de pesos. Con nuestros médicos legistas determinamos su incapacidad real y llegamos a ese acuerdo con la ART. Seguinos, cada semana un caso real con monto y lesión.",
+ "animado": {
+  "titulo_fijo": true,
+  "gancho": {
+   "chica": "",
+   "grande": "Operario de depósito cobró $ 23.000.000",
+   "pie": "ACCIDENTE DE TRABAJO - ART"
+  },
+  "broll": [
+   {
+    "ancla": "Sebastián es operario de",
+    "clip": "B02",
+    "url": "https://res.cloudinary.com/dy2gpxfsz/video/upload/broll/B02.mp4"
+   },
+   {
+    "ancla": "Con nuestros médicos legistas",
+    "clip": "B28",
+    "url": "https://res.cloudinary.com/dy2gpxfsz/video/upload/broll/B28.mp4"
+   }
+  ]
+ }
+}

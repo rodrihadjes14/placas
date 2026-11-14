@@ -1,0 +1,103 @@
+name: Componer Reel grabado a pantalla completa
+
+# Arma un Reel o un anuncio a partir de una grabación del abogado subida a la carpeta "Grabaciones Reels" de Drive
+# (video/completa.py): corta las pausas y deja al abogado a pantalla completa con bloques de texto arriba de la cabeza,
+# b-roll y subtítulos. Sube el resultado a Cloudinary como final-<ID>-<VIDEO_ID>. No publica nada.
+# Lo puede disparar el Apps Script con el evento componer-completa. Para pruebas y para los anuncios, también corre
+# al subir un archivo a video/pruebas-completa/ en la rama reel-completa (usa el último archivo modificado como payload).
+on:
+  repository_dispatch:
+    types: [componer-completa]
+  push:
+    branches: [reel-completa]
+    paths: ['video/pruebas-completa/*.json']
+
+concurrency:
+  group: completa-${{ github.event.client_payload.id || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  componer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: video
+    env:
+      CARPETA_DRIVE: 1D-Hn4I9FCGM78aBIcAAwnBZZOR-ZMtIz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Carpeta de trabajo
+        run: echo "CARPETA_TRABAJO=$RUNNER_TEMP/trabajo" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar herramientas
+        timeout-minutes: 15
+        run: |
+          bash "$GITHUB_WORKSPACE/.github/instalar-ffmpeg.sh"
+          pip install -q --progress-bar off playwright numpy pillow faster-whisper google-auth requests "opencv-python-headless<5" "mediapipe==0.10.32"
+          bash "$GITHUB_WORKSPACE/.github/instalar-navegador.sh"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Preparar HyperFrames
+        run: npx --yes hyperframes@0.8.173 browser ensure
+
+      - name: Preparar payload
+        env:
+          PAYLOAD_EVENTO: ${{ toJson(github.event.client_payload) }}
+        run: |
+          mkdir -p "$CARPETA_TRABAJO"
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            printf '%s' "$PAYLOAD_EVENTO" > "$CARPETA_TRABAJO/payload.json"
+          else
+            ARCHIVO=$(git diff --name-only HEAD~1 HEAD -- pruebas-completa | grep '\.json$' | tail -1)
+            cp "../$ARCHIVO" "$CARPETA_TRABAJO/payload.json"
+          fi
+          echo "FILA=$(python -c "import json,sys;print(json.load(open(sys.argv[1]))['id'])" "$CARPETA_TRABAJO/payload.json")" >> "$GITHUB_ENV"
+          echo "VIDEO_ID=$(python -c "import json,sys;print(json.load(open(sys.argv[1])).get('video_id') or 'completa')" "$CARPETA_TRABAJO/payload.json")" >> "$GITHUB_ENV"
+
+      - name: Bajar la grabación de Drive
+        env:
+          GOOGLE_DRIVE_SA: ${{ secrets.GOOGLE_DRIVE_SA }}
+        run: python drive.py "$FILA" "$CARPETA_TRABAJO/origen.mov"
+
+      - name: Componer
+        env:
+          ORIGEN: ${{ runner.temp }}/trabajo/origen.mov
+        run: timeout 30m python completa.py "$CARPETA_TRABAJO/payload.json"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reel-${{ env.FILA }}
+          path: |
+            ${{ runner.temp }}/trabajo/final.mp4
+            ${{ runner.temp }}/trabajo/portada.jpg
+            ${{ runner.temp }}/trabajo/informe.json
+          retention-days: 7
+
+      - name: Subir la tapa a Cloudinary
+        if: always()
+        run: |
+          [ -f "$CARPETA_TRABAJO/portada.jpg" ] && curl -sS \
+            -F "file=@$CARPETA_TRABAJO/portada.jpg" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=final-${FILA}-${VIDEO_ID}-portada" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/image/upload || echo "Aviso: no hay tapa para subir"
+
+      - name: Subir a Cloudinary
+        run: |
+          curl -sS --fail-with-body \
+            -F "file=@$CARPETA_TRABAJO/final.mp4" \
+            -F "upload_preset=make-audio" \
+            -F "public_id=final-${FILA}-${VIDEO_ID}" \
+            https://api.cloudinary.com/v1_1/dy2gpxfsz/video/upload

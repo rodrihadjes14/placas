@@ -610,7 +610,9 @@ def tiempos_de_bloques(gancho, claves, cta, palabras, total):
             b["hasta"] = round(min(b["desde"] + DURACION_CLAVE, sig - 0.2), 2)
     if cta:
         res.append(dict(cta, desde=round(t_cta, 2), hasta=round(total, 2)))
-    return [{k: b[k] for k in ("chica", "grande", "desde", "hasta")} for b in res if b["hasta"] - b["desde"] >= 1.0]
+    # "pie" (tipo de caso + ART) viaja con su bloque: animado/texto.html lo dibuja debajo de la línea grande
+    return [{k: b[k] for k in ("chica", "grande", "desde", "hasta", "pie") if k in b}
+            for b in res if b["hasta"] - b["desde"] >= 1.0]
 
 
 def candidatos_broll(inicios, arranques, bloques, t_gancho, limite, total):
@@ -912,8 +914,19 @@ def componer_texto(datos, entrada, palabras, total):
     if gancho and MONTO.search(gancho.get("grande", "")) and not gancho.get("pie"):
         gancho["pie"] = pie_por_defecto(palabras)
         print("Aviso: el gancho de caso no traía pie; se usa", gancho["pie"])
+    # Título fijo (desde el 14/11/2026, anuncios y Reels de caso grabados): con "titulo_fijo": true el bloque del
+    # gancho queda arriba durante todo el video, como el título de los Reels B-roll. En ese modo no hay frases clave
+    # ni CTA (ocuparían el mismo lugar) y el b-roll se reparte sin tener en cuenta el título, que queda por encima.
+    titulo = None
+    if animado.get("titulo_fijo") and gancho:
+        claves, cta = [], None
     bloques = tiempos_de_bloques(gancho, claves, cta, palabras, total)
+    if animado.get("titulo_fijo") and gancho and bloques:
+        titulo = bloques.pop(0)
     broll = ventanas_broll(animado, palabras, bloques, total)
+    if titulo:
+        titulo["hasta"] = round(total, 2)
+        bloques.insert(0, titulo)
     if broll:
         print("B-roll:", [(d, h, c) for d, h, _, c in broll])
     try:
@@ -998,7 +1011,9 @@ def componer_texto(datos, entrada, palabras, total):
     ], check=True)
     if gancho and bloques:
         try:
-            elegir_portada(entrada, capa, bloques[0]["desde"], bloques[0]["hasta"])
+            # con título fijo el bloque dura todo el video: la tapa se busca solo mientras se dice el gancho
+            fin_tapa = min(bloques[0]["hasta"], fin_del_gancho(palabras) if palabras else 2.5) if titulo else bloques[0]["hasta"]
+            elegir_portada(entrada, capa, bloques[0]["desde"], fin_tapa)
         except Exception as e:                 # la portada nunca frena el video
             print(f"Aviso: no se pudo armar la portada ({e})")
     return salida
