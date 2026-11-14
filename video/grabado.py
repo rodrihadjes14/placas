@@ -653,6 +653,40 @@ def componer(datos):
         raise
 
 
+CABEZA_AL_ACERCAR = 750       # altura de la cabeza tras el acercamiento; con el empuje propio del montaje queda donde siempre
+
+
+def acercamiento_de(src, origen):
+    """Si el abogado se grabó de lejos (se le ve más que de la cadera para arriba), devuelve cómo acercarlo:
+    {"zoom", "fx", "fy", "grande": grabación a mayor tamaño para no perder nitidez, "nitidez", "origen"}.
+    Devuelve None si ya está así de cerca o más (como las grabaciones de siempre), o si no se encuentra la cara:
+    en ese caso el Reel se arma igual que antes."""
+    try:
+        import completa
+        persona = completa.detectar_persona(src)
+        if not persona:
+            return None
+        zoom, fx, fy = completa.encuadre_de_cadera(persona, CABEZA_AL_ACERCAR)
+        if zoom <= 1.0:
+            return None
+        ancho, alto = completa.tamano_de(origen)
+        k = min(zoom, max(1.0, min(ancho / SW, alto / SH)))
+        grande = src
+        if k > 1.05:                                   # la grabación tiene píxeles de sobra (4K): se usan
+            grande = TRABAJO / "src-grande.mp4"
+            wk, hk = 2 * round(SW * k / 2), 2 * round(SH * k / 2)
+            correr("ffmpeg", "-v", "error", "-y", "-i", origen, "-vf",
+                   f"scale={wk}:{hk}:force_original_aspect_ratio=increase,crop={wk}:{hk}", "-r", FPS,
+                   "-c:v", "libx264", "-preset", "veryfast", "-crf", 15, "-c:a", "aac", "-b:a", "192k", grande)
+        else:
+            k = 1.0
+        return {"zoom": round(zoom, 3), "fx": fx, "fy": fy, "grande": grande, "nitidez": round(min(1.0, k / zoom), 2),
+                "origen": [ancho, alto]}
+    except Exception as err:                           # el acercamiento nunca frena el video
+        print("Aviso: no se pudo calcular el acercamiento:", str(err)[:200])
+        return None
+
+
 def _componer(datos):
     origen = datos.get("video") or os.environ.get("ORIGEN")
     orac = oraciones(datos["guion"])
@@ -669,7 +703,15 @@ def _componer(datos):
     etapa("Cortando", tramos=[[round(a, 2), round(b, 2), k] for a, b, k in tramos],
           oraciones=[[pal[u[0]]["w"], pal[u[1] - 1]["w"], round(u[2], 2)] if u else None for u in ubic])
     corte, voz = TRABAJO / "corte.mp4", TRABAJO / "voz.wav"
-    lapsos = cortar(src, tramos, corte, voz)
+    acercamiento = acercamiento_de(src, origen) if datos.get("zoom", True) else None
+    if acercamiento:                                   # grabado de lejos: se acerca hasta la cadera para arriba
+        etapa("Acercando el encuadre", **{k: v for k, v in acercamiento.items() if k != "grande"})
+        lapsos = cortar(acercamiento["grande"], tramos, TRABAJO / "corte-lejos.mp4", voz)
+        import completa
+        completa.acercar(TRABAJO / "corte-lejos.mp4", None, corte, acercamiento["zoom"], acercamiento["fx"],
+                         acercamiento["fy"], SW, SH)
+    else:
+        lapsos = cortar(src, tramos, corte, voz)
     correr("ffmpeg", "-v", "error", "-y", "-i", voz, "-ac", 1, "-ar", 16000, TRABAJO / "corte.wav")
     final_t = lapsos[-1][1]
     for nombre, archivo in (("video", corte), ("audio", voz)):       # el corte tiene que durar lo que suman los tramos
@@ -724,6 +766,8 @@ def _componer(datos):
                "tramos": [[round(a, 2), round(b, 2), k] for a, b, k in tramos],
                "tramos_volumen": [[round(a, 2), round(b, 2), k] for a, b, k in tramos_volumen],
                "duracion_corte": duracion_de(corte), "tapa_segundo": tapa_t,
+               "zoom": acercamiento["zoom"] if acercamiento else 1.0,
+               "nitidez": acercamiento["nitidez"] if acercamiento else 1.0,
                "etapas": ETAPAS, "avisos": avisos, "revisar": bool(avisos) or parecido < 0.85}
     (TRABAJO / "informe.json").write_text(json.dumps(informe, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(informe, ensure_ascii=False, indent=1))

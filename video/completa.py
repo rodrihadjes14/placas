@@ -88,35 +88,37 @@ def detectar_persona(video, muestras=12):
     return {"x": x + w / 2, "cabeza": max(0.0, y - 0.45 * h), "menton": min(float(H), y + 1.05 * h)}
 
 
-def encuadre_de_cadera(persona):
+def encuadre_de_cadera(persona, cabeza=None):
     """Cuánto hay que acercar y hacia dónde para que el abogado quede de la cadera para arriba, con la cabeza a la
     altura ZOOM_CABEZA. Devuelve (zoom, fx, fy): fx y fy dicen qué parte de lo que sobra queda afuera a la izquierda
     y arriba (0 a 1). Zoom 1 quiere decir que ya está así de cerca o más."""
+    cabeza = ZOOM_CABEZA if cabeza is None else cabeza
     alto_cabeza = max(1.0, persona["menton"] - persona["cabeza"])
-    zoom = (ZOOM_CADERA - ZOOM_CABEZA) / (ZOOM_CADERA_EN_CABEZAS * alto_cabeza)
+    zoom = (ZOOM_CADERA - cabeza) / (ZOOM_CADERA_EN_CABEZAS * alto_cabeza)
     zoom = min(ZOOM_MAX, zoom)
     if zoom < ZOOM_MINIMO:
         return 1.0, 0.5, 0.5
     sobra_x, sobra_y = W - W / zoom, H - H / zoom
     x0 = min(max(persona["x"] - (W / 2) / zoom, 0.0), sobra_x)
-    y0 = min(max(persona["cabeza"] - ZOOM_CABEZA / zoom, 0.0), sobra_y)
+    y0 = min(max(persona["cabeza"] - cabeza / zoom, 0.0), sobra_y)
     return zoom, x0 / sobra_x, y0 / sobra_y
 
 
-def acercar(entrada, voz, salida, zoom, fx, fy):
-    """Une el video cortado con la voz y, si zoom > 1, lo acerca: arranca con el cuadro entero, en ZOOM_SEGUNDOS llega
-    al encuadre de la cadera para arriba y se queda ahí hasta el final."""
+def acercar(entrada, voz, salida, zoom, fx, fy, ancho=W, alto=H):
+    """Une el video cortado con la voz (si se pasa) y, si zoom > 1, lo acerca: arranca con el cuadro entero, en
+    ZOOM_SEGUNDOS llega al encuadre de la cadera para arriba y se queda ahí hasta el final. Sale de ancho x alto."""
     if zoom <= 1.0:
-        filtro = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1"
+        filtro = f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},setsar=1"
     else:
         t = f"min(t/{ZOOM_SEGUNDOS}\\,1)"
         z = f"(1+{zoom - 1:.4f}*{t}*{t}*(3-2*{t}))"               # entra y frena suave
-        filtro = (f"scale=w='2*trunc({W}*{z}/2)':h='2*trunc({H}*{z}/2)':eval=frame:flags=bicubic,"
+        filtro = (f"scale=w='2*trunc({ancho}*{z}/2)':h='2*trunc({alto}*{z}/2)':eval=frame:flags=bicubic,"
                   # x e y se calculan con el mismo zoom del instante (crop no se entera de que el cuadro cambió de tamaño)
-                  f"crop={W}:{H}:x='{W}*({z}-1)*{fx:.4f}':y='{H}*({z}-1)*{fy:.4f}',setsar=1")
-    g.correr("ffmpeg", "-v", "error", "-y", "-i", entrada, "-i", voz, "-map", "0:v", "-map", "1:a", "-vf", filtro,
-             "-r", g.FPS, "-c:v", "libx264", "-preset", "veryfast", "-crf", 15, "-pix_fmt", "yuv420p",
-             "-c:a", "aac", "-b:a", "192k", "-shortest", salida)
+                  f"crop={ancho}:{alto}:x='{ancho}*({z}-1)*{fx:.4f}':y='{alto}*({z}-1)*{fy:.4f}',setsar=1")
+    con_voz = ["-i", voz, "-map", "0:v", "-map", "1:a"] if voz else []
+    audio = ["-c:a", "aac", "-b:a", "192k", "-shortest"] if voz else ["-an"]
+    g.correr("ffmpeg", "-v", "error", "-y", "-i", entrada, *con_voz, "-vf", filtro, "-r", g.FPS,
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", 15, "-pix_fmt", "yuv420p", *audio, salida)
 
 
 def armar(datos):
