@@ -951,7 +951,7 @@ def componer_texto(datos, entrada, palabras, total):
     animado = datos.get("animado") or {}
     if isinstance(animado, str):
         animado = json.loads(animado)
-    cara = detectar_cara(entrada)
+    cara = datos.get("cara") or detectar_cara(entrada)       # completa.py ya sabe dónde quedó la cara tras el acercamiento
     print("Cara detectada:", cara if cara else "no (se usan posiciones por defecto)")
     gancho, claves, cta = textos_de_bloques(animado)
     if gancho and MONTO.search(gancho.get("grande", "")) and not gancho.get("pie"):
