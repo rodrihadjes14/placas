@@ -648,7 +648,10 @@ def ventanas_broll(animado, palabras, bloques, total):
     va en la oración de su ancla (ver elegir_broll_por_ancla) y este reparto queda como respaldo. Un clip puede tapar un
     corte de escena de HeyGen: el salto queda disimulado igual que con el zoom."""
     from itertools import combinations
-    items = [b for b in (animado.get("broll") or []) if isinstance(b, dict) and str(b.get("url", "")).strip()][:2]
+    items = [b for b in (animado.get("broll") or []) if isinstance(b, dict) and str(b.get("url", "")).strip()]
+    if animado.get("broll_libre") and items and palabras:      # 14/11/2026: más de dos clips, cada uno en su ancla
+        return ventanas_broll_libres(items[:BROLL_LIBRE_MAX], palabras, bloques, total)
+    items = items[:2]
     if not items or not palabras:
         return []
     inicios = inicios_de_oracion(palabras)
@@ -688,6 +691,46 @@ def ventanas_broll(animado, palabras, bloques, total):
         return t if t is not None else float("inf")
     items = sorted(items, key=orden)[:n]
     res = [(d, h, str(b["url"]).strip(), str(b.get("clip", ""))) for (d, h, _), b in zip(elegidos, items)]
+    return ajustar_bloques_broll(res, bloques)
+
+
+BROLL_LIBRE_MAX = 6
+
+
+def ventanas_broll_libres(items, palabras, bloques, total):
+    """Modo "broll_libre" (desde el 14/11/2026, Reels grabados a pantalla completa y anuncios): admite más de dos
+    clips y más de uno por oración. Cada clip entra cuando se dice su ancla (que puede estar en el medio de una
+    oración) y dura hasta el final de esa oración, hasta que entra el clip siguiente o BROLL_MAX segundos, lo que
+    pase primero. Sigue sin haber b-roll en el gancho ni en la última oración. Devuelve [(desde, hasta, url, clip)]."""
+    inicios = inicios_de_oracion(palabras)
+    t_gancho = fin_del_gancho(palabras)
+    limite = inicios[-1] - 0.1 if len(inicios) >= 2 else total - 3.5
+    puntos = []
+    for b in items:
+        t = ubicar_ancla(str(b.get("ancla", "")), palabras)
+        if t is None:
+            print(f"Aviso: no se encontró el ancla del b-roll {b.get('clip')!r} ({b.get('ancla')!r}); no se usa")
+        elif t < t_gancho - 0.3 or t > limite - BROLL_MIN:
+            print(f"Aviso: el b-roll {b.get('clip')!r} cae en el gancho o en la última oración; no se usa")
+        else:
+            puntos.append((t, b))
+    puntos.sort(key=lambda x: x[0])
+    res = []
+    for k, (t, b) in enumerate(puntos):
+        fin_oracion = next((i - 0.05 for i in inicios if i > t + 0.05), total)
+        siguiente = puntos[k + 1][0] if k + 1 < len(puntos) else limite
+        hasta = min(t + BROLL_MAX, fin_oracion, siguiente, limite)
+        if hasta - t >= BROLL_MIN:
+            res.append((round(t, 2), round(hasta, 2), str(b["url"]).strip(), str(b.get("clip", ""))))
+        else:
+            print(f"Aviso: el b-roll {b.get('clip')!r} quedaría de menos de {BROLL_MIN} s; no se usa")
+    # Dos clips seguidos se encadenan: el primero dura hasta que el segundo terminó de aparecer, así no se ve al
+    # abogado un instante entre los dos.
+    for k in range(len(res) - 1):
+        d, h, u, c = res[k]
+        if res[k + 1][0] - h < 0.4:
+            res[k] = (d, round(res[k + 1][0] + BROLL_FUNDIDO, 2), u, c)
+    print("B-roll ubicado en sus anclas:", [(c, d, h) for d, h, _, c in res])
     return ajustar_bloques_broll(res, bloques)
 
 

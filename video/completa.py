@@ -17,7 +17,8 @@ Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento):
     guion     el guion textual que se leyó
     animado   textos de pantalla y b-roll, con el formato de la columna ANIMADO:
               {"gancho": {"chica", "grande"[, "pie"]}, "claves": [{"chica", "grande", "ancla"}], "cta": {"chica", "grande"},
-               "broll": [{"ancla", "clip", "url"}], "titulo_fijo": true|false}
+               "broll": [{"ancla", "clip", "url"}], "titulo_fijo": true|false, "broll_libre": true|false}
+              Con "broll_libre": true admite hasta seis clips, y cada uno entra cuando se dice su ancla.
               Con "titulo_fijo": true el bloque del gancho queda arriba durante todo el video (título de los
               anuncios y Reels de caso) y no se muestran frases clave ni CTA.
     sfx       opcional, true por defecto.
@@ -35,6 +36,55 @@ import grabado as g
 import componer as montaje
 
 W, H = 1080, 1920
+VOZ_DESDE_HZ = 1000           # la voz se busca por encima de esta frecuencia
+VOZ_PAUSA = 0.30              # segundos sin voz para que cuente como pausa
+
+
+def silencios_de_voz(wav):
+    """Pausas del audio medidas solo en las frecuencias altas (más de 1 kHz), donde hay voz pero no respiración.
+
+    El detector de grabado.py mide el volumen total: una respiración o un golpe de aire después de la última palabra
+    suena y se toma como parte de la oración, así que el corte queda hasta un segundo tarde (14/11/2026, anuncios
+    AD-02 y AD-03). Esos ruidos están por debajo de 1 kHz; la voz siempre tiene energía por encima. El umbral es
+    relativo al volumen de la propia grabación. Devuelve [(desde, hasta)] como grabado.silencios()."""
+    import wave
+    import numpy as np
+    with wave.open(str(wav)) as f:
+        sr = f.getframerate()
+        x = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+    n = int(sr * 0.02)
+    ventana, frec = np.hanning(2 * n), np.fft.rfftfreq(2 * n, 1 / sr)
+    alta = frec >= VOZ_DESDE_HZ
+    energia = np.array([10 * np.log10((np.abs(np.fft.rfft(x[i:i + 2 * n] * ventana)) ** 2)[alta].sum() / (n * n) + 1e-10)
+                        for i in range(0, len(x) - 2 * n, n)])
+    if not len(energia):
+        return []
+    umbral = max(np.percentile(energia, 95) - 32, np.percentile(energia, 10) + 10)
+    mudo, res, i = energia < umbral, [], 0
+    while i < len(mudo):
+        if mudo[i]:
+            j = i
+            while j < len(mudo) and mudo[j]:
+                j += 1
+            if (j - i) * 0.02 >= VOZ_PAUSA:
+                res.append((round(i * 0.02 + 0.01, 3), round(j * 0.02 + 0.01, 3)))
+            i = j
+        else:
+            i += 1
+    return res
+
+
+def ajustar_finales(ubic, pal, sil):
+    """La transcripción a veces estira la última palabra de una oración hasta después de la respiración. Acá se la
+    termina donde de verdad se calla la voz, para que tramos_de_corte() corte ahí."""
+    for u in ubic:
+        if not u:
+            continue
+        p = pal[u[1] - 1]
+        minimo = p["s"] + min(0.5, 0.045 * len(g.normalizar(p["w"])))
+        candidatas = [s0 for s0, _ in sil if s0 >= minimo]
+        if candidatas and candidatas[0] < p["e"]:
+            p["e"] = candidatas[0]
 
 
 def armar(datos):
@@ -63,7 +113,9 @@ def _armar(datos, trabajo):
     g.etapa("Transcribiendo y ubicando las oraciones del guion", duracion_original=round(total, 2))
     pal = g.transcribir(trabajo / "src.wav")
     ubic = g.ubicar_oraciones(orac, pal)
-    tramos = g.tramos_de_corte(ubic, pal, g.silencios(trabajo / "src.wav"), total)
+    pausas = silencios_de_voz(trabajo / "src.wav")
+    ajustar_finales(ubic, pal, pausas)
+    tramos = g.tramos_de_corte(ubic, pal, pausas, total)
     g.etapa("Cortando", tramos=[[round(a, 2), round(b, 2), k] for a, b, k in tramos])
     corte, voz = trabajo / "corte.mp4", trabajo / "voz.wav"
     lapsos = g.cortar(src, tramos, corte, voz)
