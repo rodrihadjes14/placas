@@ -9,7 +9,7 @@ on:
   repository_dispatch:
     types: [componer-grabado]
   push:
-    branches: [reel-grabado, tapa-reel]
+    branches: [reel-grabado, tapa-reel, reel-completa]
     paths: ['video/pruebas/*.json']
 
 concurrency:

@@ -170,6 +170,87 @@ def tramos_de_corte(ubic, pal, sil, total):
     return tramos
 
 
+VOZ_DESDE_HZ = 1000           # la voz se busca por encima de esta frecuencia
+VOZ_PAUSA = 0.30              # segundos sin voz para que cuente como pausa
+
+
+def silencios_de_voz(wav):
+    """Pausas del audio medidas solo en las frecuencias altas (más de 1 kHz), donde hay voz pero no respiración.
+
+    silencios() mide el volumen total: una respiración o un golpe de aire después de la última palabra
+    suena y se toma como parte de la oración, así que el corte queda hasta un segundo tarde (14/11/2026, anuncios
+    AD-02 y AD-03). Esos ruidos están por debajo de 1 kHz; la voz siempre tiene energía por encima. El umbral es
+    relativo al volumen de la propia grabación. Devuelve [(desde, hasta)] como grabado.silencios()."""
+    import wave
+    with wave.open(str(wav)) as f:
+        sr = f.getframerate()
+        x = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+    n = int(sr * 0.02)
+    ventana, frec = np.hanning(2 * n), np.fft.rfftfreq(2 * n, 1 / sr)
+    alta = frec >= VOZ_DESDE_HZ
+    energia = np.array([10 * np.log10((np.abs(np.fft.rfft(x[i:i + 2 * n] * ventana)) ** 2)[alta].sum() / (n * n) + 1e-10)
+                        for i in range(0, len(x) - 2 * n, n)])
+    if not len(energia):
+        return []
+    umbral = max(np.percentile(energia, 95) - 32, np.percentile(energia, 10) + 10)
+    mudo, res, i = energia < umbral, [], 0
+    while i < len(mudo):
+        if mudo[i]:
+            j = i
+            while j < len(mudo) and mudo[j]:
+                j += 1
+            if (j - i) * 0.02 >= VOZ_PAUSA:
+                res.append((round(i * 0.02 + 0.01, 3), round(j * 0.02 + 0.01, 3)))
+            i = j
+        else:
+            i += 1
+    return res
+
+
+ARRANQUE_MAX = 0.35           # segundos que se conservan, como mucho, antes de que la voz aparezca en las frecuencias altas
+
+
+def cuidar_arranques(tramos, tramos_volumen):
+    """Los sonidos con que suele empezar una oración ("Un", "Nuestros", "Lo que") casi no tienen energía por encima de
+    1 kHz, así que el detector de frecuencias altas puede marcar el arranque tarde y comerse la primera sílaba. El
+    arranque de cada oración se toma entonces de silencios(), el detector de volumen, que es el que venía funcionando,
+    sin adelantarse más de ARRANQUE_MAX segundos. Los finales, que es donde se colaban las respiraciones, quedan como
+    los marcó el detector de frecuencias altas."""
+    res, piso, vistas = [], 0.0, set()
+    for a, b, k in tramos:
+        if k not in vistas:
+            vistas.add(k)
+            viejo = next((x[0] for x in tramos_volumen if x[2] == k), a)
+            a = max(piso, min(a, max(viejo, a - ARRANQUE_MAX)))
+        res.append((a, b, k))
+        piso = b
+    return res
+
+
+def ajustar_finales(ubic, pal, sil):
+    """La transcripción a veces estira la última palabra de una oración hasta después de la respiración. Acá se la
+    termina donde de verdad se calla la voz, para que tramos_de_corte() corte ahí."""
+    for u in ubic:
+        if not u:
+            continue
+        p = pal[u[1] - 1]
+        minimo = p["s"] + min(0.5, 0.045 * len(normalizar(p["w"])))
+        candidatas = [s0 for s0, _ in sil if s0 >= minimo]
+        if candidatas and candidatas[0] < p["e"]:
+            p["e"] = candidatas[0]
+
+
+def tramos_sin_respiracion(ubic, pal, wav, total):
+    """Tramos que se conservan, con los finales medidos en las frecuencias altas (sin respiraciones) y los arranques
+    cuidados con el detector de volumen. Devuelve (tramos, tramos del detector de volumen solo), los segundos para
+    dejar en el informe cuánto cambió cada corte. Desde el 14/11/2026 lo usan grabado.py y completa.py."""
+    volumen = silencios(wav)
+    viejos = tramos_de_corte(ubic, [dict(p) for p in pal], volumen, total)
+    pausas = silencios_de_voz(wav)
+    ajustar_finales(ubic, pal, pausas)
+    return cuidar_arranques(tramos_de_corte(ubic, pal, pausas, total), viejos), viejos
+
+
 def cortar(origen, tramos, destino, audio):
     """Une los tramos (cuadros enteros): deja el video sin sonido en destino y la voz en audio (WAV).
     Devuelve [(desde, hasta, oración)] en el tiempo del video cortado.
@@ -584,7 +665,7 @@ def _componer(datos):
     etapa("Transcribiendo y ubicando las oraciones del guion", duracion_original=round(total, 2))
     pal = transcribir(TRABAJO / "src.wav")
     ubic = ubicar_oraciones(orac, pal)
-    tramos = tramos_de_corte(ubic, pal, silencios(TRABAJO / "src.wav"), total)
+    tramos, tramos_volumen = tramos_sin_respiracion(ubic, pal, TRABAJO / "src.wav", total)
     etapa("Cortando", tramos=[[round(a, 2), round(b, 2), k] for a, b, k in tramos],
           oraciones=[[pal[u[0]]["w"], pal[u[1] - 1]["w"], round(u[2], 2)] if u else None for u in ubic])
     corte, voz = TRABAJO / "corte.mp4", TRABAJO / "voz.wav"
@@ -641,6 +722,7 @@ def _componer(datos):
                "parecido_con_guion": round(parecido, 3), "transcripcion_final": " ".join(p["w"] for p in pal2),
                "oraciones": [{"texto": o, "parecido": round(u[2], 3) if u else 0} for o, u in zip(orac, ubic)],
                "tramos": [[round(a, 2), round(b, 2), k] for a, b, k in tramos],
+               "tramos_volumen": [[round(a, 2), round(b, 2), k] for a, b, k in tramos_volumen],
                "duracion_corte": duracion_de(corte), "tapa_segundo": tapa_t,
                "etapas": ETAPAS, "avisos": avisos, "revisar": bool(avisos) or parecido < 0.85}
     (TRABAJO / "informe.json").write_text(json.dumps(informe, ensure_ascii=False, indent=1), encoding="utf-8")
