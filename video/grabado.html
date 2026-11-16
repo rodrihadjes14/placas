@@ -141,6 +141,10 @@ window.setData=async d=>{D=d;await document.fonts.ready;
    let fg=parseFloat(getComputedStyle(g).fontSize),fc=parseFloat(getComputedStyle(c).fontSize);
    if(fg>fc*1.45)fg=fc*1.45;if(fg<fc*1.2)fc=fg/1.2;g.style.fontSize=fg+'px';c.style.fontSize=fc+'px';
    const pie=b.el.children.length>2?b.el.lastElementChild:null;if(pie&&pie!==g)pie.style.fontSize=Math.min(42,fc*.82)+'px'});
+  // El texto nunca tapa al abogado: grabado.py mide dónde queda el pelo y manda el piso ("abajo") y el techo ("tope")
+  // de cada bloque. Si entra en su lugar de siempre (330 px) queda ahí; si no, sube; y si ni así entra, se achica.
+  d.bloques.forEach(b=>{b.k=1;if(b.abajo==null)return;const h=b.el.offsetHeight,tope=b.tope??250,lugar=Math.max(60,b.abajo-tope);
+   b.k=Math.min(1,lugar/h);b.el.style.transformOrigin='center top';b.el.style.top=Math.max(tope,Math.min(330,b.abajo-h*b.k))+'px'});
   d.bloques.forEach(b=>b.el.style.display='none')}};
 window.setT=t=>{if(!D)return;
  if(LAYER==='bg'){$('dots').style.transform=`translate(${(t*9)%54}px,${(t*6)%54}px)`;pop($('chip'),t,D.pip[0]+.15,.35,.7);
@@ -152,7 +156,7 @@ window.setT=t=>{if(!D)return;
    // y la salida es más corta, con la curva opuesta.
    // El desenfoque va con una curva más lenta que la opacidad: si los dos usan la misma, el texto ya está nítido
    // cuando se empieza a ver y el desenfoque no se percibe.
-   const po=pr(t,b.e-.26,.26);b.el.style.opacity=1-po*po;b.el.style.transform=`scale(${1+.04*po})`;b.el.style.filter=po>0?`blur(${18*eo(po)}px)`:'none';
+   const po=pr(t,b.e-.26,.26);b.el.style.opacity=1-po*po;b.el.style.transform=`scale(${(b.k||1)*(1+.04*po)})`;b.el.style.filter=po>0?`blur(${18*eo(po)}px)`:'none';
    let pie=false;[...b.el.children].forEach(k=>{
     if(k.classList.contains('tbig')){pie=true;const p=xo(pr(t,b.s+.12,.35));k.style.opacity=p>0?1:0;k.style.clipPath=`inset(0 ${(1-p)*100}% 0 0 round 10px)`}
     else{const s0=b.s+(pie?.45:0),q=pr(t,s0,.5);k.style.opacity=cl(pr(t,s0,.16));k.style.transform=`scale(${.94+.06*xo(q)})`;k.style.filter=q<1?`blur(${(1-eo(q))*22}px)`:'none'}})});

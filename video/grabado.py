@@ -55,6 +55,11 @@ ESCALA_SILUETA = 0.62         # tamaño del abogado recortado respecto del cuadr
 MARGEN_ANTES, MARGEN_DESPUES = 0.12, 0.15
 PAUSA_INTERNA = 0.55          # pausas más largas que esto dentro de una oración también se cortan
 SFX_VOLUMEN = {"whoosh": 0.40, "click": 0.35}
+# El texto nunca tapa al abogado (15/11/2026): los bloques del gancho y del cierre se ubican por encima del pelo.
+TEXTO_TOPE = 250              # nada de texto por encima de esta altura (encabezado de Reels)
+TEXTO_MARGEN = 45             # aire entre el bloque y la parte más alta de la persona
+TEXTO_ALTO = {2: 215, 3: 290} # alto aproximado de un bloque de dos líneas y de uno con pie
+ZOOM_BASE_MAX = 1.27          # el mayor acercamiento de las oraciones a pantalla completa
 
 
 def correr(*args):
@@ -525,11 +530,12 @@ def mezcla(a, b, p):
     return a + (b - a) * p
 
 
-def componer_cuadros(corte, tl, lapsos, n, f1, f2, destino):
-    from rembg import new_session, remove
+def zoom_y_silueta(tl, lapsos, f1, f2):
+    """Devuelve zoom(f) y P(f): cuánto se acerca cada cuadro a pantalla completa y cuánto del pasaje a silueta lleva.
+    Las oraciones a pantalla completa alternan empuje lento y encuadre más cerrado; tl["_zoom_factor"] (0 a 1) achica
+    esos acercamientos cuando hace falta lugar para el texto arriba de la cabeza."""
     hay_pip = f2 > f1
-    sesion = new_session("u2net_human_seg") if hay_pip else None
-    # acercamientos de las oraciones a pantalla completa: se alternan empuje lento y encuadre más cerrado
+    factor = float(tl.get("_zoom_factor", 1.0))
     oracion_en = lambda t: next((k for d, h, k in lapsos if d - 1e-6 <= t < h), lapsos[-1][2])
     ini_o, fin_o = {}, {}
     for d, h, k in lapsos:
@@ -543,8 +549,10 @@ def componer_cuadros(corte, tl, lapsos, n, f1, f2, destino):
             return K
         k = oracion_en(t)
         if orden.get(k, 0) % 2 == 0:
-            return mezcla(1.16, 1.23, (t - ini_o[k]) / max(0.1, fin_o[k] - ini_o[k]))
-        return 1.27
+            z = mezcla(1.16, 1.23, (t - ini_o[k]) / max(0.1, fin_o[k] - ini_o[k]))
+        else:
+            z = ZOOM_BASE_MAX
+        return 1 + (z - 1) * factor
 
     def P(f):
         if not hay_pip or f < f1:
@@ -552,6 +560,73 @@ def componer_cuadros(corte, tl, lapsos, n, f1, f2, destino):
         if f < f2:
             return suave((f - f1) / 15)
         return 1 - suave((f - f2) / 13)
+
+    return zoom, P
+
+
+def techo_de_persona(corte, desde, hasta, sesion):
+    """[(segundo, fila)]: la fila más alta (en píxeles de 1080x1920, antes del acercamiento del montaje) donde aparece
+    la persona, medida sobre su silueta cinco veces por segundo entre desde y hasta. Incluye el pelo."""
+    from rembg import remove
+    aw, ah = 270, 480
+    lee = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", f"{desde:.3f}", "-t", f"{max(0.2, hasta - desde):.3f}", "-i", str(corte),
+                            "-vf", f"fps=5,scale={aw}:{ah}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    res, k = [], 0
+    while True:
+        crudo = lee.stdout.read(aw * ah * 3)
+        if len(crudo) < aw * ah * 3:
+            break
+        m = np.asarray(remove(Image.frombuffer("RGB", (aw, ah), crudo, "raw", "RGB", 0, 1), session=sesion, only_mask=True).convert("L"))
+        filas = np.flatnonzero((m > 128).sum(axis=1) >= 6)
+        if len(filas):
+            res.append((desde + k / 5, float(filas[0]) * H / ah))
+        k += 1
+    lee.wait()
+    return res
+
+
+def ubicar_bloques(corte, tl, lapsos, f1, f2):
+    """Hace lugar para los bloques de texto arriba de la cabeza, para que nunca tapen al abogado: mide dónde está la
+    parte más alta de la persona mientras cada bloque está en pantalla, achica los acercamientos si con ellos la cabeza
+    queda demasiado arriba (tl["_zoom_factor"]) y le deja a cada bloque su piso ("abajo") y su techo ("tope").
+    grabado.html lo sube o lo achica para que entre en ese espacio."""
+    if not tl.get("bloques"):
+        return
+    from rembg import new_session
+    sesion = new_session("u2net_human_seg")
+    _, P = zoom_y_silueta(tl, lapsos, f1, f2)
+    medidas = []
+    for b in tl["bloques"]:
+        ms = [(t, y) for t, y in techo_de_persona(corte, b["s"], b["e"], sesion) if P(round(t * FPS)) <= 0]
+        medidas.append(ms)
+    # ¿Con el acercamiento de siempre alcanza el lugar? Si no, se achica en todo el video (se conserva la alternancia).
+    tope_zoom = ZOOM_BASE_MAX
+    for b, ms in zip(tl["bloques"], medidas):
+        hace_falta = TEXTO_TOPE + TEXTO_ALTO[3 if b.get("pie") else 2] + TEXTO_MARGEN
+        for _, y in ms:
+            if y < H - 1:
+                tope_zoom = min(tope_zoom, (H - hace_falta) / (H - y))
+    factor = min(1.0, max(0.0, (tope_zoom - 1) / (ZOOM_BASE_MAX - 1)))
+    tl["_zoom_factor"] = round(factor, 3)
+    if factor < 0.999:
+        tl["_avisos"].append(f"El texto no entraba arriba de la cabeza: los acercamientos se redujeron al {factor:.0%}")
+    zoom, _ = zoom_y_silueta(tl, lapsos, f1, f2)
+    for b, ms in zip(tl["bloques"], medidas):
+        if not ms:
+            continue
+        techo = min(zoom(round(t * FPS)) * (y - H) + H for t, y in ms)       # el montaje acerca desde el borde de abajo
+        b["abajo"], b["tope"] = int(techo - TEXTO_MARGEN), TEXTO_TOPE
+        if b["abajo"] - TEXTO_TOPE < 150:
+            tl["_avisos"].append("La cabeza queda muy arriba en la grabación: el texto del bloque "
+                                 f"\"{b.get('grande', '')}\" sale achicado. Conviene grabar con más aire arriba.")
+    print("Lugar para el texto:", [(b.get("grande"), b.get("abajo")) for b in tl["bloques"]], "factor de zoom", factor)
+
+
+def componer_cuadros(corte, tl, lapsos, n, f1, f2, destino):
+    from rembg import new_session, remove
+    hay_pip = f2 > f1
+    sesion = new_session("u2net_human_seg") if hay_pip else None
+    zoom, P = zoom_y_silueta(tl, lapsos, f1, f2)
 
     lee = subprocess.Popen(["ffmpeg", "-v", "error", "-i", str(corte), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
     escribe = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS),
@@ -757,6 +832,11 @@ def _componer(datos):
     n = round(final_t * FPS)
     hay = bool(tl["escenas"])
     f1, f2 = (round(tl["pip"][0] * FPS), min(n, round(tl["pip"][1] * FPS))) if hay else (n, n)
+    try:                                               # ubicar el texto nunca frena el video
+        etapa("Midiendo dónde queda la cabeza para ubicar el texto")
+        ubicar_bloques(corte, tl, lapsos, f1, f2)
+    except Exception as err:
+        avisos.append(f"No se pudo medir la cabeza para ubicar el texto: {str(err)[:200]}")
     etapa("Dibujando gráficos, textos y subtítulos", cuadros=n, cuadros_con_silueta=max(0, f2 - f1))
     dibujar_capas(tl, n, f1, min(n, f2 + 14) if hay else n)
     etapa("Componiendo")
