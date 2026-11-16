@@ -1,11 +1,13 @@
 """
 Tapa (cover) del Reel grabado: una imagen diseñada para que el Reel se lea bien en la grilla del perfil y en el feed.
 
-Toma un cuadro del gancho (el abogado a pantalla completa) en el instante en que la cara está más relajada, y le suma
-la etiqueta del tema arriba y el gancho en letras grandes abajo (tapa.html). Deja portada.jpg en la carpeta de trabajo;
+En los informativos (16/11/2026) el fondo es una imagen fija del abogado sin placas ni subtítulos (carpeta sujetos/,
+rotan si hay varias). En los de caso real toma un cuadro del gancho en el instante en que la cara está más relajada.
+En los dos le suma la etiqueta del tema arriba y el gancho en letras grandes abajo (tapa.html). Deja portada.jpg en la carpeta de trabajo;
 el flujo la sube a Cloudinary como final-<ID>-<VIDEO_ID>-portada y el publicador la usa como tapa en Instagram y Facebook.
 """
 import pathlib
+import re
 import urllib.request
 
 from PIL import Image
@@ -13,6 +15,25 @@ from PIL import Image
 AQUI = pathlib.Path(__file__).resolve().parent
 MODELO_CARA = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 ZOOM = 1.2                                    # mismo encuadre que el gancho del video
+SUJETOS = AQUI / "sujetos"                    # imágenes limpias del abogado para las tapas de los informativos
+
+
+def es_caso(datos):
+    """Los Reels de caso real llevan el pie con el tipo de caso ("ACCIDENTE DE TRABAJO - ART") debajo del monto."""
+    gancho = datos.get("tapa") or datos.get("gancho") or {}
+    return datos.get("tipo") == "caso" or bool(gancho.get("pie"))
+
+
+def sujeto_para(datos):
+    """Imagen del sujeto para la tapa de un informativo (16/11/2026): el abogado sin placas ni subtítulos, ya encuadrado
+    a 1080x1920. Si hay varias en sujetos/, rotan según el número del ID de la fila. None si no corresponde o no hay."""
+    if es_caso(datos) or datos.get("tapa_sujeto") is False:
+        return None
+    imagenes = sorted(p for p in SUJETOS.glob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png"))
+    if not imagenes:
+        return None
+    m = re.search(r"\d+", str(datos.get("id", "")))
+    return imagenes[(int(m.group()) if m else 0) % len(imagenes)]
 
 
 def tension_cara(video, tiempos, trabajo):
@@ -89,10 +110,19 @@ def armar(video, desde, hasta, datos, trabajo, ancho=1080, alto=1920, zoom_base=
     quede por encima del texto del gancho; si ni así alcanza, el gancho sube y va debajo de la etiqueta."""
     import subprocess
     trabajo = pathlib.Path(trabajo)
-    t = elegir_instante(video, desde, hasta, trabajo)
-    crudo = trabajo / "tapa-cuadro.png"
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", str(video), "-frames:v", "1", str(crudo)], check=True)
-    src = Image.open(crudo).convert("RGB")
+    sujeto = sujeto_para(datos)
+    if sujeto:                                   # informativo: imagen fija del sujeto, ya encuadrada (sin acercar)
+        t, zoom_base = None, 1.0
+        src = Image.open(sujeto).convert("RGB")
+        print(f"Tapa: imagen del sujeto {sujeto.name}")
+        modelo = trabajo / "face_landmarker.task"
+        if not modelo.exists():
+            urllib.request.urlretrieve(MODELO_CARA, modelo)
+    else:                                        # caso real: cuadro del gancho con la cara más relajada
+        t = elegir_instante(video, desde, hasta, trabajo)
+        crudo = trabajo / "tapa-cuadro.png"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", str(video), "-frames:v", "1", str(crudo)], check=True)
+        src = Image.open(crudo).convert("RGB")
     k = src.width / ancho
     gancho = datos.get("tapa") or datos.get("gancho") or {}
     fondo = trabajo / "tapa-fondo.jpg"
