@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<!-- Tapa (cover) del Reel grabado (video/tapa.py): un cuadro del gancho de fondo, la etiqueta del tema arriba y el
+<!-- 16/11/2026: etiqueta más grande (70px) y gancho más chico (hasta 116px) para que guarden relación.
+     Tapa (cover) del Reel grabado (video/tapa.py): un cuadro del gancho de fondo, la etiqueta del tema arriba y el
      gancho en letras grandes abajo. Todo queda dentro de la franja central 3:4 (de 240 a 1680 px de alto), que es
      lo que muestra la grilla del perfil. setData({etiqueta, chica, grande}) y después setFondo(url, arriba). -->
 <style>
@@ -10,7 +11,7 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:#1C1C1C;font-fam
 #fondo{position:absolute;inset:0;background-size:cover;background-position:center}
 #velo{position:absolute;inset:0;background:linear-gradient(180deg,#1c1c1c40 0,#1c1c1c00 22%,#1c1c1c00 52%,#1c1c1c99 100%)}
 #chip{position:absolute;left:0;top:286px;width:1080px;display:flex;justify-content:center}
-#chip span{background:#fff;font-size:56px;line-height:1.1;letter-spacing:.5px;padding:14px 30px;border-radius:12px;white-space:nowrap;box-shadow:0 8px 0 #1c1c1c40}
+#chip span{background:#fff;font-size:70px;line-height:1.1;letter-spacing:.5px;padding:16px 34px;border-radius:12px;white-space:nowrap;box-shadow:0 8px 0 #1c1c1c40}
 #bloque{position:absolute;left:0;bottom:290px;width:1080px;display:flex;flex-direction:column;align-items:center;gap:12px}
 .chica{background:#fff;font-size:66px;line-height:1.05;padding:12px 28px;border-radius:10px;white-space:nowrap;box-shadow:0 8px 0 #1c1c1c40;margin-bottom:6px}
 .grande{background:#FFD21F;line-height:1;padding:16px 32px;border-radius:12px;white-space:nowrap;box-shadow:0 8px 0 #1c1c1c40}
@@ -30,8 +31,8 @@ window.setData=async d=>{await document.fonts.ready;
  if(d.etiqueta){chip.innerHTML=`<span>${esc(d.etiqueta)}</span>`;achicar(chip.firstChild,940,30)}
  const b=document.getElementById('bloque'),pal=String(d.grande||'').trim().split(/\s+/).filter(Boolean);
  let elegido=null;
- for(let n=1;n<=3;n++){const r=repartir(pal,n);b.innerHTML=r.map(x=>`<div class="grande" style="font-size:136px">${esc(x)}</div>`).join('');
-  const f=Math.min(...[...b.children].map(e=>achicar(e,960,60)));elegido={r,f};if(f>=108||n>=pal.length)break}
+ for(let n=1;n<=3;n++){const r=repartir(pal,n);b.innerHTML=r.map(x=>`<div class="grande" style="font-size:116px">${esc(x)}</div>`).join('');
+  const f=Math.min(...[...b.children].map(e=>achicar(e,960,60)));elegido={r,f};if(f>=94||n>=pal.length)break}
  b.innerHTML=(d.chica?`<div class="chica">${esc(d.chica)}</div>`:'')+elegido.r.map(x=>`<div class="grande" style="font-size:${elegido.f}px">${esc(x)}</div>`).join('');
  if(d.chica)achicar(b.firstChild,960,34);
  const r=b.getBoundingClientRect();return {letra:elegido.f,arriba:r.top,alto:r.height,bajo_etiqueta:chip.getBoundingClientRect().bottom}};
