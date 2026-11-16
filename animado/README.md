@@ -3,6 +3,13 @@
 Plantillas HTML + GSAP que HyperFrames convierte en video. La tarea diaria solo completa los textos;
 el diseño (Bricolage Grotesque, neutros y amarillo) queda fijo en la plantilla.
 
+- `placa.html`: placa vertical 1080x1920, 6 s (desde el 15/11/2026). Título con la frase entre *asteriscos* sobre banda
+  amarilla, línea de apoyo y llamado corto. Lenguaje de movimiento: entrada óptica (opacidad, escala y desenfoque, sin
+  desplazamiento), llamado que llega después, banda en segundo golpe y salida más corta con la curva opuesta.
+  Presupuesto de texto: unas 12 palabras en total (tres por segundo de lectura). El acercamiento lento, el grano y
+  los cuatro sonidos (`assets/sfx-placa`) los agrega `terminar_placa.py` sobre el video ya dibujado, porque un zoom
+  lento hecho en la plantilla avanza a saltos de un píxel. Sirve como placa de cierre, pieza suelta o anuncio.
+  Todavía no la usa ninguna pieza del flujo.
 - `post.html`: post estático animado, 1080x1350, 8 s. Misma placa que la JPG (texto, resaltado amarillo,
   pie con logo) más un cierre que invita a comentar o a mandar un mensaje privado. Sin asteriscos resalta la última oración.
   Se arma al graficar: ExportadorCarruseles.gs dispara el workflow `animar-post` (texto = primer
@@ -28,6 +35,7 @@ En las afirmaciones, la frase entre *asteriscos* se resalta en amarillo.
 Render local:
 
     npx --yes hyperframes@0.8.173 render . -c post.html --variables-file ejemplos/post-rechazo.json -o post.mp4
+    npx --yes hyperframes@0.8.173 render . -c placa.html --variables-file ejemplos/placa-art.json -o placa.mp4 && python terminar_placa.py placa.mp4 placa-final.mp4
     npx --yes hyperframes@0.8.173 render . -c carrusel.html --variables-file ejemplos/carrusel-dias.json -o carrusel.mp4
     npx --yes hyperframes@0.8.173 render . -c reel.html --variables-file ejemplos/reel-itinere.json -o reel.mp4
     npx --yes hyperframes@0.8.173 render . -c reel.html --format mov --variables '{"vista_previa":false}' -o capa.mov
