@@ -877,4 +877,10 @@ def _componer(datos):
 
 if __name__ == "__main__":
     crudo = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8") if len(sys.argv) > 1 else os.environ["PAYLOAD"]
-    componer(json.loads(crudo))
+    _d = json.loads(crudo)
+    if _d.get("solo_cuadros"):
+        import runpy
+        sys.argv = ["cuadros_sujeto.py", sys.argv[1]]
+        runpy.run_path(str(pathlib.Path(__file__).parent / "cuadros_sujeto.py"), run_name="__main__")
+        sys.exit(0)
+    componer(_d)
