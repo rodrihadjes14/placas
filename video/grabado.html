@@ -22,8 +22,8 @@ html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;font
 .stamp>div{background:var(--carbon);color:#fff;font-size:92px;padding:14px 40px;border-radius:14px;white-space:nowrap}
 .check{position:absolute;right:-18px;top:-18px;width:58px;height:58px;border-radius:50%;background:var(--ama);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 0 #1c1c1c22}
 .tblock{position:absolute;left:0;top:330px;width:1080px;display:none;flex-direction:column;align-items:center;gap:14px}
-.tsmall{background:#fff;color:#111;font-size:54px;padding:10px 26px;border-radius:8px;white-space:nowrap}
-.tbig{background:var(--ama);color:#111;font-size:76px;line-height:1;padding:18px 34px;border-radius:10px;white-space:nowrap}
+.tsmall{background:#fff;color:#111;font-size:62px;line-height:1.1;padding:10px 26px;border-radius:8px;max-width:980px;text-align:center;text-wrap:balance}
+.tbig{background:var(--ama);color:#111;font-size:88px;line-height:1.06;padding:18px 34px;border-radius:10px;max-width:980px;text-align:center;text-wrap:balance}
 #sub{position:absolute;display:none;gap:18px;justify-content:center;flex-wrap:wrap;white-space:nowrap;font-size:74px;line-height:1.12;letter-spacing:.5px}
 #sub span{padding:2px 10px;border-radius:10px}
 #sub.full{left:90px;width:900px;top:1500px;color:#fff;text-shadow:0 0 14px #000c,0 4px 0 #000,3px 3px 0 #000,-3px -3px 0 #000,3px -3px 0 #000,-3px 3px 0 #000}
@@ -134,13 +134,16 @@ window.setData=async d=>{D=d;await document.fonts.ready;
   fitAll(box);UPD.forEach(x=>x.el.style.display='none');return malos}
  else{const box=$('blocks');d.bloques.forEach(b=>{const el=document.createElement('div');el.className='tblock';el.style.display='flex';
    el.innerHTML=(b.chica?`<div class="tsmall">${esc(b.chica)}</div>`:'')+`<div class="tbig">${esc(b.grande)}</div>`+(b.pie?`<div class="tsmall" style="font-size:42px">${esc(b.pie)}</div>`:'');box.appendChild(el);b.el=el});
-  fitAll(box);
-  // La línea amarilla es siempre más grande que la blanca, pero dentro de una brecha acotada (entre 1,2 y 1,45 veces),
-  // para que la diferencia no dependa del largo de cada texto.
-  d.bloques.forEach(b=>{const g=b.el.querySelector('.tbig'),c=b.el.querySelector('.tsmall');if(!g||!c)return;
-   let fg=parseFloat(getComputedStyle(g).fontSize),fc=parseFloat(getComputedStyle(c).fontSize);
-   if(fg>fc*1.45)fg=fc*1.45;if(fg<fc*1.2)fc=fg/1.2;g.style.fontSize=fg+'px';c.style.fontSize=fc+'px';
-   const pie=b.el.children.length>2?b.el.lastElementChild:null;if(pie&&pie!==g)pie.style.fontSize=Math.min(42,fc*.82)+'px'});
+  // Tipografía grande (15/11/2026): un texto largo ya no se achica hasta entrar en un renglón; pasa a dos renglones
+  // y recién se achica si necesita un tercero. La línea amarilla es siempre más grande que la blanca, dentro de una
+  // brecha acotada (entre 1,2 y 1,45 veces), para que la diferencia no dependa del largo de cada texto.
+  const renglones=e=>{const cs=getComputedStyle(e);return Math.round((e.offsetHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom))/parseFloat(cs.lineHeight))};
+  const entrar=(e,min)=>{let f=parseFloat(getComputedStyle(e).fontSize);while(renglones(e)>2&&f>min){f-=2;e.style.fontSize=f+'px'}return f};
+  d.bloques.forEach(b=>{const g=b.el.querySelector('.tbig'),c=b.el.querySelector('.tsmall');if(!g)return;
+   let fg=entrar(g,48),fc=c?entrar(c,36):0;
+   if(c){if(fg>fc*1.45)fg=fc*1.45;if(fg<fc*1.2)fc=fg/1.2;g.style.fontSize=fg+'px';c.style.fontSize=fc+'px'}
+   const pie=b.el.children.length>2?b.el.lastElementChild:null;if(pie&&pie!==g)pie.style.fontSize=Math.min(46,(fc||fg)*.78)+'px'});
+  window.ALTOS=d.bloques.map(b=>b.el.offsetHeight);
   // El texto nunca tapa al abogado: grabado.py mide dónde queda el pelo y manda el piso ("abajo") y el techo ("tope")
   // de cada bloque. Si entra en su lugar de siempre (330 px) queda ahí; si no, sube; y si ni así entra, se achica.
   d.bloques.forEach(b=>{b.k=1;if(b.abajo==null)return;const h=b.el.offsetHeight,tope=b.tope??250,lugar=Math.max(60,b.abajo-tope);
