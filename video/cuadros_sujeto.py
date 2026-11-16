@@ -13,7 +13,10 @@ palabra = datos.get("palabra", "corte").lower()
 wav = trabajo / "audio.wav"
 subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", origen, "-ac", "1", "-ar", "16000", str(wav)], check=True)
 modelo = WhisperModel("small", device="cpu", compute_type="int8")
-segs, _ = modelo.transcribe(str(wav), language="es", word_timestamps=True, vad_filter=True)
+import wave, numpy as np
+with wave.open(str(wav)) as fw:
+    audio = np.frombuffer(fw.readframes(fw.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+segs, _ = modelo.transcribe(audio, language="es", word_timestamps=True, vad_filter=True)
 palabras = [(w.word.strip().lower().strip(",.¿?"), w.start, w.end) for s in segs for w in s.words]
 hit = next((p for p in palabras if palabra in p[0]), None)
 print("Palabras:", palabras[:40])
