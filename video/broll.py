@@ -1,7 +1,7 @@
 """
 TikTok solo con b-roll (desde el 03/11/2026): video vertical armado 100 % con clips de la pestaña BRoll, la voz del
-estudio (audio de ElevenLabs), subtítulos karaoke en mayúscula y el gancho fijo arriba como título, así el primer
-cuadro ya es la tapa. Es el formato de las cuentas de caso real con monto (ej. @derechosart). No usa HeyGen.
+estudio (audio de ElevenLabs), subtítulos karaoke en mayúscula y el gancho arriba como título: entra animado en el
+primer segundo (bandas amarillas que barren, pie óptico) y queda fijo; la tapa se arma aparte con el título completo. Es el formato de las cuentas de caso real con monto (ej. @derechosart). No usa HeyGen.
 
 Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento) con:
     id         ID de la fila en la pestaña Aprobación (FORMATO TikTok)
@@ -17,7 +17,7 @@ Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento) co
     sfx        opcional, true por defecto: whoosh en cada cambio de clip y caja registradora con el monto del gancho
     billetes   opcional, true por defecto: lluvia de billetes al comienzo si el gancho trae "$ monto"
 
-Deja final.mp4 y portada.jpg (el primer cuadro, con el título) en la carpeta de trabajo.
+Deja final.mp4 y portada.jpg (primer cuadro del b-roll con el título completo) en la carpeta de trabajo.
 """
 import json
 import os
@@ -141,9 +141,18 @@ def renderizar_titulo(texto, destino, pie=""):
         pag.goto((AQUI / "titulo.html").as_uri())
         pag.evaluate("document.fonts.ready")
         pag.wait_for_function("window.LISTO === true")
-        pag.screenshot(path=str(destino), omit_background=True)
+        pag.screenshot(path=str(destino), omit_background=True)      # título completo: imagen fija para la tapa
+        # Entrada animada (15/11/2026): un cuadro por imagen hasta que el título queda completo; ffmpeg repite el último.
+        carpeta = destino.parent / "titulo"
+        carpeta.mkdir(exist_ok=True)
+        for viejo in carpeta.glob("*.png"):
+            viejo.unlink()
+        cuadros = int(float(pag.evaluate("window.DURA || 0")) * FPS) + 2
+        for f in range(cuadros):
+            pag.evaluate("t => window.setT(t)", f / FPS if f < cuadros - 1 else 99)
+            pag.screenshot(path=str(carpeta / f"{f:03d}.png"), omit_background=True)
         nav.close()
-    return destino
+    return destino, carpeta
 
 
 def subtitulos_mayuscula(palabras, destino):
@@ -231,10 +240,10 @@ def componer_broll(datos):
         if not pie and c.MONTO.search(titulo):      # red de seguridad (05/11/2026): todo Reel de caso lleva pie
             pie = c.pie_por_defecto(palabras)
             print("Aviso: el gancho de caso no traía pie; se usa", pie)
-        png = renderizar_titulo(titulo, TRABAJO / "titulo.png", pie)
-        entradas += ["-loop", "1", "-i", str(png)]
+        png, cuadros_titulo = renderizar_titulo(titulo, TRABAJO / "titulo.png", pie)
+        entradas += ["-framerate", str(FPS), "-i", str(cuadros_titulo / "%03d.png")]
         n = sum(1 for x in entradas if x == "-i") - 1
-        filtros.append(f"[{ultimo}][{n}:v]overlay=0:0:shortest=1[vt]")
+        filtros.append(f"[{ultimo}][{n}:v]overlay=0:0:eof_action=repeat[vt]")
         ultimo = "vt"
     ass = subtitulos_mayuscula(palabras, TRABAJO / "subtitulos.ass")
     fuentes = str(AQUI / "fuentes").replace(":", "\\:")
@@ -270,10 +279,17 @@ def componer_broll(datos):
     imagen = c.duracion_video(salida)
     if imagen < total - 0.5:
         raise SystemExit(f"El video quedó corto: {imagen:.1f} s de imagen para {total:.1f} s de audio")
-    # Tapa: el primer cuadro (b-roll con el título, sin subtítulos porque la voz arranca después de INTRO).
-    # TikTok muestra ese cuadro como portada por defecto.
-    subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(salida),
-                    "-frames:v", "1", "-q:v", "2", str(TRABAJO / "portada.jpg")], check=True)
+    # Tapa: el primer cuadro del b-roll con el título completo y sin subtítulos. Desde el 15/11/2026 el título entra
+    # animado, así que el primer cuadro del video ya no lo trae: la tapa se arma aparte con la imagen fija del título.
+    # (TikTok muestra por defecto el primer cuadro del video; la tapa con título se elige al publicar el borrador.)
+    if titulo:
+        subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(fondo), "-i", str(png),
+                        "-filter_complex",
+                        f"[0:v]drawbox=x=0:y=0:w=iw:h=ih:color=black@{OSCURECER}:t=fill[v];[v][1:v]overlay=0:0",
+                        "-frames:v", "1", "-q:v", "2", str(TRABAJO / "portada.jpg")], check=True)
+    else:
+        subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(salida),
+                        "-frames:v", "1", "-q:v", "2", str(TRABAJO / "portada.jpg")], check=True)
     print(f"Listo: {len(tramos_)} clips, {len(lista)} tomas, {total:.1f} s")
     return salida
 

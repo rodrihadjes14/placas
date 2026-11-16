@@ -6,8 +6,8 @@
 <title>Título del TikTok solo con b-roll · Estudio Canaro</title>
 <style>
   /* Título fijo de los TikTok solo con b-roll (desde el 03/11/2026): el gancho en mayúscula sobre bandas amarillas,
-     con el mismo estilo que la línea grande del texto animado de los Reels. Queda en pantalla todo el video,
-     así el primer cuadro ya es la tapa. Fondo transparente: broll.py lo superpone al b-roll. */
+     con el mismo estilo que la línea grande del texto animado de los Reels. Entra animado en el primer segundo
+     (ver setT) y queda en pantalla todo el video. Fondo transparente: broll.py lo superpone al b-roll. */
   @font-face { font-family: "Bricolage"; src: url("fuentes/BricolageGrotesque-variable.woff2") format("woff2"); font-weight: 200 800; }
   :root { --amarillo:#F2C230; --carbon:#1B1A19; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -58,6 +58,27 @@
     pie.textContent = d.pie;
     caja.appendChild(pie);
   }
+  // Entrada del título (desde el 15/11/2026), con el mismo lenguaje que la placa vertical y los bloques del Reel
+  // grabado: cada banda amarilla barre de izquierda a derecha, una después de la otra, y el pie blanco entra óptico
+  // (opacidad + escala + desenfoque, con el desenfoque más lento que la opacidad para que se perciba).
+  // Sin llamar a setT la página queda con el título completo: así se saca la imagen fija de la tapa.
+  const bandas = [...caja.querySelectorAll(".banda")], pieEl = caja.querySelector(".pie");
+  const cl = (x) => Math.min(1, Math.max(0, x)), xo = (p) => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * p)), eo = (p) => 1 - Math.pow(1 - p, 3);
+  const PASO = 0.12, BARRIDO = 0.35, PIE_EN = PASO * bandas.length + 0.1;
+  window.DURA = pieEl ? PIE_EN + 0.5 : PASO * (bandas.length - 1) + BARRIDO;
+  window.setT = (t) => {
+    bandas.forEach((b, i) => {
+      const p = xo(cl((t - i * PASO) / BARRIDO));
+      b.style.opacity = p > 0 ? 1 : 0;
+      b.style.clipPath = p >= 1 ? "none" : `inset(-40px ${(1 - p) * 100}% -40px -40px)`;
+    });
+    if (pieEl) {
+      const q = cl((t - PIE_EN) / 0.5);
+      pieEl.style.opacity = cl((t - PIE_EN) / 0.16);
+      pieEl.style.transform = `scale(${0.94 + 0.06 * xo(q)})`;
+      pieEl.style.filter = q < 1 ? `blur(${(1 - eo(q)) * 22}px)` : "none";
+    }
+  };
   window.LISTO = true;
 </script>
 </body>
