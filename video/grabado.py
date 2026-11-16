@@ -481,7 +481,11 @@ def linea_de_tiempo(datos, pal, lapsos, total):
     bloques = []
     if datos.get("gancho"):
         fin_gancho = pip[0] if graf else next((h for d, h, k in lapsos if k == 0), total)
-        bloques.append(dict(datos["gancho"], s=0.0, e=fin_gancho - 0.02))
+        gancho = dict(datos["gancho"])
+        for k in ("chica", "grande"):              # el gancho va siempre en mayúscula (16/11/2026), venga como venga escrito
+            if gancho.get(k):
+                gancho[k] = str(gancho[k]).upper()
+        bloques.append(dict(gancho, s=0.0, e=fin_gancho - 0.02))
     for i, (s, c) in enumerate(cierres):
         e = cierres[i + 1][0] if i + 1 < len(cierres) else total + 0.2
         bloques.append(dict(c, s=s + (0.35 if i == 0 and graf else 0.0), e=e))
