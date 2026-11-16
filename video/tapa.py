@@ -3,7 +3,8 @@ Tapa (cover) del Reel grabado: una imagen diseñada para que el Reel se lea bien
 
 En los informativos (16/11/2026) el fondo es una imagen fija del abogado sin placas ni subtítulos (carpeta sujetos/,
 rotan si hay varias). En los de caso real toma un cuadro del gancho en el instante en que la cara está más relajada.
-En los dos le suma la etiqueta del tema arriba y el gancho en letras grandes abajo (tapa.html). Deja portada.jpg en la carpeta de trabajo;
+En los dos le suma la etiqueta del tema arriba y el gancho en letras grandes abajo (tapa.html), sin la línea chica
+del gancho, que repetía la etiqueta (16/11/2026; en el video el gancho sigue con sus dos líneas). Deja portada.jpg en la carpeta de trabajo;
 el flujo la sube a Cloudinary como final-<ID>-<VIDEO_ID>-portada y el publicador la usa como tapa en Instagram y Facebook.
 """
 import pathlib
@@ -134,7 +135,7 @@ def armar(video, desde, hasta, datos, trabajo, ancho=1080, alto=1920, zoom_base=
             nav = p.chromium.launch(channel="chrome", args=["--allow-file-access-from-files"])
         pag = nav.new_page(viewport={"width": ancho, "height": alto})
         pag.goto(f"file://{AQUI / 'tapa.html'}")
-        m = pag.evaluate("d => setData(d)", {"etiqueta": datos.get("etiqueta", ""), "chica": gancho.get("chica", ""),
+        m = pag.evaluate("d => setData(d)", {"etiqueta": datos.get("etiqueta", ""), "chica": "",   # sin línea chica (16/11/2026): repetía la etiqueta
                                              "grande": gancho.get("grande", "")})
         z, arriba = zoom_base, False
         try:
