@@ -58,11 +58,7 @@ SFX_VOLUMEN = {"whoosh": 0.40, "click": 0.35}
 # El texto nunca tapa al abogado (15/11/2026): los bloques del gancho y del cierre se ubican por encima del pelo.
 TEXTO_TOPE = 250              # nada de texto por encima de esta altura (encabezado de Reels)
 TEXTO_MARGEN = 45             # aire entre el bloque y la parte más alta de la persona
-<<<<<<< HEAD
-TEXTO_ALTO = {2: 215, 3: 290} # alto aproximado de un bloque de dos líneas y de uno con pie
-=======
 TEXTO_ALTO = {2: 240, 3: 320} # alto aproximado de un bloque de dos líneas y de uno con pie (si no se pudo medir)
->>>>>>> main
 ZOOM_BASE_MAX = 1.27          # el mayor acercamiento de las oraciones a pantalla completa
 
 
@@ -596,8 +592,6 @@ def ubicar_bloques(corte, tl, lapsos, f1, f2):
     grabado.html lo sube o lo achica para que entre en ese espacio."""
     if not tl.get("bloques"):
         return
-<<<<<<< HEAD
-=======
     altos = []
     try:                                               # alto real de cada bloque, medido en la misma plantilla que lo dibuja
         from playwright.sync_api import sync_playwright
@@ -614,7 +608,6 @@ def ubicar_bloques(corte, tl, lapsos, f1, f2):
             nav.close()
     except Exception as err:
         print("Aviso: no se pudo medir el alto de los bloques:", str(err)[:160])
->>>>>>> main
     from rembg import new_session
     sesion = new_session("u2net_human_seg")
     _, P = zoom_y_silueta(tl, lapsos, f1, f2)
@@ -624,14 +617,9 @@ def ubicar_bloques(corte, tl, lapsos, f1, f2):
         medidas.append(ms)
     # ¿Con el acercamiento de siempre alcanza el lugar? Si no, se achica en todo el video (se conserva la alternancia).
     tope_zoom = ZOOM_BASE_MAX
-<<<<<<< HEAD
-    for b, ms in zip(tl["bloques"], medidas):
-        hace_falta = TEXTO_TOPE + TEXTO_ALTO[3 if b.get("pie") else 2] + TEXTO_MARGEN
-=======
     for i, (b, ms) in enumerate(zip(tl["bloques"], medidas)):
         alto = altos[i] if i < len(altos) and altos[i] > 0 else TEXTO_ALTO[3 if b.get("pie") else 2]
         hace_falta = TEXTO_TOPE + alto + TEXTO_MARGEN
->>>>>>> main
         for _, y in ms:
             if y < H - 1:
                 tope_zoom = min(tope_zoom, (H - hace_falta) / (H - y))
