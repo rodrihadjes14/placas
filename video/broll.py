@@ -17,6 +17,14 @@ Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento) co
     sfx        opcional, true por defecto: whoosh en cada cambio de clip y caja registradora con el monto del gancho
     billetes   opcional, true por defecto: lluvia de billetes al comienzo si el gancho trae "$ monto"
 
+    Opcionales dentro de "animado" (24/11/2026, primero en T150; si faltan, todo funciona como antes):
+    gancho.hasta   ancla (primeras palabras de una oración): el título del gancho sale de pantalla cuando empieza esa
+                   oración, en vez de quedar fijo todo el video. La tapa sigue llevando el título completo.
+    gancho.sin_pie true: el gancho va sin la línea blanca del tipo de caso (no se completa con el pie por defecto).
+    placas         [{"ancla": "...", "texto": "..."}]: bloques de texto con el mismo estilo del título, que se van
+                   alternando arriba: cada uno entra con su ancla (con un click) y sale cuando entra el siguiente;
+                   el último queda hasta el final.
+
 Deja final.mp4 y portada.jpg (primer cuadro del b-roll con el título completo) en la carpeta de trabajo.
 """
 import json
@@ -143,7 +151,7 @@ def renderizar_titulo(texto, destino, pie=""):
         pag.wait_for_function("window.LISTO === true")
         pag.screenshot(path=str(destino), omit_background=True)      # título completo: imagen fija para la tapa
         # Entrada animada (15/11/2026): un cuadro por imagen hasta que el título queda completo; ffmpeg repite el último.
-        carpeta = destino.parent / "titulo"
+        carpeta = destino.parent / destino.stem          # titulo.png → titulo/, placa-1.png → placa-1/
         carpeta.mkdir(exist_ok=True)
         for viejo in carpeta.glob("*.png"):
             viejo.unlink()
@@ -162,7 +170,7 @@ def subtitulos_mayuscula(palabras, destino):
     return destino
 
 
-def efectos(tramos_, titulo, datos):
+def efectos(tramos_, titulo, datos, clicks=()):
     """[(segundo, archivo, volumen)]: caja registradora con el monto (si lo hay) y whoosh en cada cambio de clip."""
     if not datos.get("sfx", True):
         return []
@@ -183,6 +191,8 @@ def efectos(tramos_, titulo, datos):
         agregar("caja", INTRO + 0.15)
     for desde, *_ in tramos_[1:]:
         agregar("whoosh", desde)
+    for t in clicks:                       # entrada de cada placa alternada
+        agregar("click", t + 0.12)
     return sorted(res)
 
 
@@ -235,16 +245,41 @@ def componer_broll(datos):
             ultimo = "vl"
         except Exception as e:            # la lluvia nunca frena el video
             print(f"Aviso: no se pudo armar la lluvia de billetes ({e})")
+    gancho = animado.get("gancho") or {}
     if titulo:
-        pie = str((animado.get("gancho") or {}).get("pie", "") or "").strip()
-        if not pie and c.MONTO.search(titulo):      # red de seguridad (05/11/2026): todo Reel de caso lleva pie
+        pie = str(gancho.get("pie", "") or "").strip()
+        if not pie and c.MONTO.search(titulo) and not gancho.get("sin_pie"):   # red de seguridad (05/11/2026)
             pie = c.pie_por_defecto(palabras)
             print("Aviso: el gancho de caso no traía pie; se usa", pie)
         png, cuadros_titulo = renderizar_titulo(titulo, TRABAJO / "titulo.png", pie)
         entradas += ["-framerate", str(FPS), "-i", str(cuadros_titulo / "%03d.png")]
         n = sum(1 for x in entradas if x == "-i") - 1
-        filtros.append(f"[{ultimo}][{n}:v]overlay=0:0:eof_action=repeat[vt]")
+        fin_gancho = c.ubicar_ancla(gancho["hasta"], palabras) if gancho.get("hasta") else None
+        if gancho.get("hasta") and fin_gancho is None:
+            print(f"Aviso: no se ubicó gancho.hasta {gancho['hasta']!r}; el título queda fijo")
+        ventana = f":enable='between(t,0,{fin_gancho:.3f})'" if fin_gancho else ""
+        filtros.append(f"[{ultimo}][{n}:v]overlay=0:0:eof_action=repeat{ventana}[vt]")
         ultimo = "vt"
+    # Placas alternadas (24/11/2026): cada una entra animada en su ancla y sale cuando entra la siguiente.
+    placas = []
+    for pl in animado.get("placas") or []:
+        t = c.ubicar_ancla(pl.get("ancla", ""), palabras) if pl.get("ancla") else None
+        texto = c._sin_asteriscos(str(pl.get("texto", "") or "")).strip()
+        if t is None or not texto:
+            print(f"Aviso: no se ubicó la placa {pl.get('texto')!r}; no se usa")
+            continue
+        placas.append((t, texto))
+    placas.sort()
+    for k, (t, texto) in enumerate(placas):
+        hasta = placas[k + 1][0] if k + 1 < len(placas) else total + 1
+        _, cuadros = renderizar_titulo(texto, TRABAJO / f"placa-{k + 1}.png")
+        entradas += ["-framerate", str(FPS), "-i", str(cuadros / "%03d.png")]
+        n = sum(1 for x in entradas if x == "-i") - 1
+        filtros.append(f"[{n}:v]setpts=PTS-STARTPTS+{t:.3f}/TB[pl{k}]")
+        filtros.append(f"[{ultimo}][pl{k}]overlay=0:0:eof_action=repeat:enable='between(t,{t:.3f},{hasta:.3f})'[vp{k}]")
+        ultimo = f"vp{k}"
+    if placas:
+        print("Placas:", [(round(t, 2), tx) for t, tx in placas])
     ass = subtitulos_mayuscula(palabras, TRABAJO / "subtitulos.ass")
     fuentes = str(AQUI / "fuentes").replace(":", "\\:")
     filtros.append(f"[{ultimo}]subtitles={ass.as_posix()}:fontsdir={fuentes}[vf]")
@@ -253,7 +288,7 @@ def componer_broll(datos):
     ms = int(INTRO * 1000)
     filtros.append(f"[1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay={ms}|{ms},apad[voz]")
     audio_map = "[voz]"
-    sonidos = efectos(tramos_, titulo, datos)
+    sonidos = efectos(tramos_, titulo, datos, [t for t, _ in placas])
     if sonidos:
         base = sum(1 for x in entradas if x == "-i")
         etiquetas = []
