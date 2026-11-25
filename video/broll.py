@@ -19,8 +19,10 @@ Recibe un JSON (variable de entorno PAYLOAD o archivo en el primer argumento) co
 
     Opcionales dentro de "animado" (24/11/2026, primero en T150; si faltan, todo funciona como antes):
     gancho.hasta   ancla (primeras palabras de una oración): el título del gancho sale de pantalla cuando empieza esa
-                   oración, en vez de quedar fijo todo el video. La tapa sigue llevando el título completo.
-    gancho.sin_pie true: el gancho va sin la línea blanca del tipo de caso (no se completa con el pie por defecto).
+                   oración. Desde el 25/11/2026, si falta, sale cuando empieza la segunda oración del guion; con
+                   gancho.fijo = true queda todo el video, como antes. La tapa sigue llevando el título completo.
+    gancho.pie     desde el 25/11/2026 el pie (tipo de caso) va solo si la fila lo trae: ya no se completa solo.
+    gancho.sin_pie true: el gancho va sin pie aunque la fila lo traiga.
     placas         [{"ancla": "...", "texto": "..."}]: bloques de texto con el mismo estilo del título, que se van
                    alternando arriba: cada uno entra con su ancla (con un click) y sale cuando entra el siguiente;
                    el último queda hasta el final.
@@ -247,16 +249,16 @@ def componer_broll(datos):
             print(f"Aviso: no se pudo armar la lluvia de billetes ({e})")
     gancho = animado.get("gancho") or {}
     if titulo:
-        pie = str(gancho.get("pie", "") or "").strip()
-        if not pie and c.MONTO.search(titulo) and not gancho.get("sin_pie"):   # red de seguridad (05/11/2026)
-            pie = c.pie_por_defecto(palabras)
-            print("Aviso: el gancho de caso no traía pie; se usa", pie)
+        pie = "" if gancho.get("sin_pie") else str(gancho.get("pie", "") or "").strip()   # sin pie automático (25/11/2026)
         png, cuadros_titulo = renderizar_titulo(titulo, TRABAJO / "titulo.png", pie)
         entradas += ["-framerate", str(FPS), "-i", str(cuadros_titulo / "%03d.png")]
         n = sum(1 for x in entradas if x == "-i") - 1
         fin_gancho = c.ubicar_ancla(gancho["hasta"], palabras) if gancho.get("hasta") else None
         if gancho.get("hasta") and fin_gancho is None:
-            print(f"Aviso: no se ubicó gancho.hasta {gancho['hasta']!r}; el título queda fijo")
+            print(f"Aviso: no se ubicó gancho.hasta {gancho['hasta']!r}; sale con la segunda oración")
+        if fin_gancho is None and not gancho.get("fijo"):     # por defecto, el gancho sale con la segunda oración
+            inicios = c.inicios_de_oracion(palabras)
+            fin_gancho = inicios[1] if len(inicios) > 1 else None
         ventana = f":enable='between(t,0,{fin_gancho:.3f})'" if fin_gancho else ""
         filtros.append(f"[{ultimo}][{n}:v]overlay=0:0:eof_action=repeat{ventana}[vt]")
         ultimo = "vt"
